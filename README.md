@@ -14,15 +14,17 @@ hinges, motors, sliders and springs.
 
 ## Layout
 
+- `index.html`: the page's markup
 - `src/sim.js`: the simulation (no DOM; runs in Node for the tests)
-- `src/ui.js`, `src/body.html`, `src/head.html`, `src/add2.css`: the page
-- `build.py`: stitches `src/` into a single page, `dist/index.html`
+- `src/ui.js`: the page's behaviour; `src/style.css`: its look
+- `src/main.js` and `vite.config.js`: the entry point. For now the simulation and the page share one scope
+  (the page reads the simulation's arrays directly), so the config joins them into one module.
 - `tests/`: headless scene tests (`node tests/test15.js` runs the engine)
 - `tools/`: generators for the element and chemistry data tables (from Periodic-Table-JSON)
 
 ## Running
 
-    npm install          # planck, for the tests
-    python3 build.py     # then open dist/index.html
-
-The page loads Planck.js (a port of Box2D) from jsDelivr.
+    npm install
+    npm run dev        # live-reloading copy at http://localhost:5173
+    npm run build      # the deployable page in dist/
+    npm run preview    # serve dist/ to check the build

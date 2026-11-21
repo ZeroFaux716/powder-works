@@ -4,9 +4,14 @@
   "private": true,
   "description": "A falling-sand chemistry sandbox with rigid-body machines: Powder Toy meets Algodoo, in the browser.",
   "scripts": {
-    "build": "python3 build.py"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
+    "vite": "^8.3.8"
+  },
+  "dependencies": {
     "planck": "1.4.2"
   }
 }

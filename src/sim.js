@@ -2010,14 +2010,14 @@ function placeBody(rb) {
   const px = pos.x / S, py = pos.y / S;
   const x0 = Math.max(0, Math.floor(px - rb.R)), x1 = Math.min(W - 1, Math.ceil(px + rb.R));
   const y0 = Math.max(0, Math.floor(py - rb.R)), y1 = Math.min(H - 1, Math.ceil(py + rb.R));
-  const { occ, w, h, ox, oy } = rb;
+  const { occ, w, h, ox: offX, oy: offY } = rb;   // (offX/offY: where the part's grid sits; ox is the fresh-air field)
   gen++;
   fpI.length = 0; fpK.length = 0; moves.length = 0;
   for (let Y = y0; Y <= y1; Y++) {
     const dy = Y + 0.5 - py;
     for (let X = x0; X <= x1; X++) {
       const dx = X + 0.5 - px;
-      const ix = Math.floor(c * dx + s * dy - ox), iy = Math.floor(-s * dx + c * dy - oy);
+      const ix = Math.floor(c * dx + s * dy - offX), iy = Math.floor(-s * dx + c * dy - offY);
       if (ix < 0 || iy < 0 || ix >= w || iy >= h) continue;
       const k = iy * w + ix;
       if (!occ[k]) continue;
