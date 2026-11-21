@@ -1,0 +1,16 @@
+global.planck = require('planck');
+const fs = require('fs');
+const Sim = new Function(fs.readFileSync(__dirname + '/../src/sim.js', 'utf8') + '\nreturn Sim;')();
+const { W, H, ID, MATS } = Sim;
+Sim.loadPreset('chem');
+const count = (x0, y0, x1, y1) => { const c = {}; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * W + x; if (Sim.st[i] === 0 || Sim.type[i] === ID.wall) continue; const m = MATS[Sim.type[i]]; const k = m.sym || m.name; c[k] = (c[k] || 0) + 1; } return Object.entries(c).sort((p, q) => q[1] - p[1]).slice(0, 7).map(([k, v]) => k + ' ' + v).join(', '); };
+const run = s => { for (let f = 0; f < s * 60; f++) Sim.step(); };
+console.log('beaker start:', count(10, 96, 47, 134));
+run(10);
+console.log('beaker after 10 s:', count(10, 96, 47, 134));
+console.log('crucible, switched off, 10 s:', count(78, 112, 111, 130));
+for (let y = 131; y <= 132; y++) for (let x = 126; x <= 127; x++) Sim.dset[y * W + x] = 1;
+run(15);
+console.log('crucible 15 s after switching on:', count(78, 100, 111, 130), '| wall T', Math.round(Sim.temp[131 * W + 90]));
+run(15);
+console.log('crucible 30 s after switching on:', count(78, 100, 111, 130));

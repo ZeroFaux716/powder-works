@@ -1,0 +1,12 @@
+{
+  "name": "powder-works",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A falling-sand chemistry sandbox with rigid-body machines: Powder Toy meets Algodoo, in the browser.",
+  "scripts": {
+    "build": "python3 build.py"
+  },
+  "devDependencies": {
+    "planck": "1.4.2"
+  }
+}

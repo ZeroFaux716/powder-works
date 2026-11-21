@@ -1,0 +1,176 @@
+<body>
+<header>
+  <h1>Powder Works</h1>
+  <div class="group">
+    <label for="preset">Scene</label>
+    <select id="preset">
+      <option value="engine">Two-stroke engine</option>
+      <option value="crank">One-shot crank</option>
+      <option value="chem">Chemistry bench</option>
+      <option value="refinery">Oil refinery</option>
+      <option value="components">Sensors, pumps and springs</option>
+      <option value="cylinder">Gasoline cylinder</option>
+      <option value="steam">Steam lift</option>
+      <option value="forge">Forge</option>
+      <option value="thermite">Thermite</option>
+      <option value="diesel">Diesel hammer</option>
+      <option value="hydraulic">Hydraulic press</option>
+      <option value="wind">Wind tunnel</option>
+      <option value="reactor">Reactor</option>
+      <option value="blank">Empty bench</option>
+    </select>
+    <button id="reset" type="button">Reset scene</button>
+  </div>
+  <div class="group" role="group" aria-label="Edit">
+    <button id="undo" type="button" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="redo" type="button" title="Redo (Ctrl+Y)">Redo</button>
+    <button id="save" type="button" title="Save to a file (Ctrl+S)">Save</button>
+    <button id="open" type="button" title="Open a saved file (Ctrl+O)">Open</button>
+    <input id="fileIn" type="file" accept=".json,application/json" hidden>
+    <button id="edges" type="button" aria-pressed="true" title="Whether things leave at the edge of the bench">Edges: open</button>
+  </div>
+  <span class="spacer"></span>
+  <div class="group" role="group" aria-label="View">
+    <button type="button" data-view="0" aria-pressed="true">Materials</button>
+    <button type="button" data-view="1" aria-pressed="false">Pressure</button>
+    <button type="button" data-view="2" aria-pressed="false">Heat</button>
+    <button type="button" data-view="3" aria-pressed="false">Flow</button>
+    <button type="button" data-view="4" aria-pressed="false">Burnt gas</button>
+  </div>
+  <div class="group">
+    <span id="mode" class="chip" data-mode="build">Building</span>
+    <button id="play" type="button" class="primary">Play</button>
+    <button id="rewind" type="button" disabled>Rewind</button>
+  </div>
+</header>
+<main>
+  <div id="tools" role="group" aria-label="Tools">
+    <button type="button" id="matBtn" aria-haspopup="dialog" aria-expanded="false"><span class="sw" id="matSw"></span><span id="matName">Sand</span><span class="key">T</span></button>
+    <div class="quick" role="group" aria-label="Common materials">
+      <button type="button" data-mat="sand" title="Sand (1)"><span class="sw" style="background:#d9b76a"></span>Sand</button>
+      <button type="button" data-mat="water" title="Water (2)"><span class="sw" style="background:#3b7fd9"></span>Water</button>
+      <button type="button" data-mat="gasoline" title="Gasoline (3)"><span class="sw" style="background:#a8c23a"></span>Fuel</button>
+      <button type="button" data-mat="wall" title="Wall (4)"><span class="sw" style="background:#6b727d"></span>Wall</button>
+    </div>
+    <div class="sep"></div>
+    <button type="button" data-tool="brush" aria-pressed="false"><span class="sw glyph" aria-hidden="true">&#x25CF;</span>Brush<span class="key">B</span></button>
+    <button type="button" data-tool="fire" aria-pressed="true"><span class="sw" style="background:#ff8a2a"></span>Fire<span class="key">5</span></button>
+    <button type="button" data-tool="heat" aria-pressed="false"><span class="sw" style="background:#e0483c"></span>Heat<span class="key">H</span></button>
+    <button type="button" data-tool="cool" aria-pressed="false"><span class="sw" style="background:#58b8f0"></span>Cool<span class="key">C</span></button>
+    <button type="button" data-tool="fan" aria-pressed="false"><span class="sw" style="background:#3fa7a0"></span>Fan<span class="key">F</span></button>
+    <div class="quick dirs" id="fanDirs" role="group" aria-label="Fan direction">
+      <button type="button" data-dir="2" aria-pressed="false" aria-label="Blow left">&larr;</button>
+      <button type="button" data-dir="3" aria-pressed="false" aria-label="Blow up">&uarr;</button>
+      <button type="button" data-dir="4" aria-pressed="false" aria-label="Blow down">&darr;</button>
+      <button type="button" data-dir="1" aria-pressed="true" aria-label="Blow right">&rarr;</button>
+    </div>
+    <div class="sep"></div>
+    <button type="button" class="slim" data-tool="contact" aria-pressed="false"><span class="sw" style="background:#d6b040"></span>Contact<span class="key">K</span></button>
+    <button type="button" class="slim" data-tool="wire" aria-pressed="false"><span class="sw" style="background:#b0663a"></span>Wire<span class="key">W</span></button>
+    <button type="button" class="slim" data-tool="plug" aria-pressed="false"><span class="sw" style="background:#e1e8f0"></span>Plug<span class="key">P</span></button>
+    <button type="button" class="slim" data-tool="injector" aria-pressed="false"><span class="sw" style="background:#a874de"></span>Injector<span class="key">I</span></button>
+    <button type="button" class="slim" data-tool="valve" aria-pressed="false"><span class="sw" style="background:#5cc878"></span>Valve<span class="key">V</span></button>
+    <button type="button" class="slim" data-tool="switch" aria-pressed="false"><span class="sw" style="background:#78e65a"></span>Switch<span class="key">O</span></button>
+    <button type="button" class="slim" data-tool="heater" aria-pressed="false"><span class="sw" style="background:#d65c38"></span>Heater<span class="key">J</span></button>
+    <button type="button" class="slim" data-tool="sensor" aria-pressed="false"><span class="sw" style="background:#4fd1c5"></span>Sensor<span class="key">Y</span></button>
+    <button type="button" class="slim" data-tool="inverter" aria-pressed="false"><span class="sw" style="background:#c77dff"></span>Inverter<span class="key">U</span></button>
+    <button type="button" class="slim" data-tool="pump" aria-pressed="false"><span class="sw" style="background:#3a7bd5"></span>Pump<span class="key">L</span></button>
+    <button type="button" class="slim" data-tool="electrode" aria-pressed="false"><span class="sw" style="background:#c9d1d9"></span>Electrode<span class="key">Z</span></button>
+    <div class="sep"></div>
+    <button type="button" data-tool="erase" aria-pressed="false"><span class="sw" style="background:#0b0f14"></span>Erase<span class="key">0</span></button>
+    <div class="sep"></div>
+    <button type="button" data-tool="part" aria-pressed="false"><span class="sw" id="partSw" style="background:#9fb3c8"></span>Part<span class="key">6</span></button>
+    <button type="button" data-tool="block" aria-pressed="false"><span class="sw" id="blockSw" style="background:#9fb3c8"></span>Block<span class="key">7</span></button>
+    <button type="button" data-tool="move" aria-pressed="false"><span class="sw glyph" aria-hidden="true">&#x2725;</span>Move<span class="key">M</span></button>
+    <div class="sep"></div>
+    <button type="button" data-tool="hinge" aria-pressed="false"><span class="sw round" style="border-color:#f5d76e"></span>Hinge<span class="key">8</span></button>
+    <button type="button" data-tool="motor" aria-pressed="false"><span class="sw round" style="border-color:#6ee0f5"></span>Motor<span class="key">9</span></button>
+    <button type="button" data-tool="slider" aria-pressed="false"><span class="sw track" style="border-color:#f29bd0"></span>Slider<span class="key">S</span></button>
+    <button type="button" data-tool="spring" aria-pressed="false"><span class="sw round" style="border-color:#9be37a"></span>Spring<span class="key">G</span></button>
+    <div class="brush">
+      <label for="brush">Brush size <span id="brushval">3</span></label>
+      <input id="brush" type="range" min="1" max="8" value="3">
+    </div>
+  </div>
+  <div id="stage">
+    <canvas id="view" width="240" height="150" aria-label="Simulation"></canvas>
+    <canvas id="overlay" width="960" height="600" aria-hidden="true"></canvas>
+    <section id="palette" hidden aria-label="Materials">
+      <div class="ins-head">
+        <strong>Materials</strong>
+        <button id="palClose" type="button" aria-label="Close materials">&times;</button>
+      </div>
+      <input id="palSearch" type="search" placeholder="Search: iron, Fe, 26, chloride or NaCl" autocomplete="off" spellcheck="false" aria-label="Search materials">
+      <div id="ptable" class="ptable"></div>
+      <div id="compounds" class="compounds"></div>
+      <p id="madeHead" class="subhead" hidden>Made so far</p>
+      <div id="made" class="compounds"></div>
+      <div id="allcpd" class="compounds all"></div>
+      <p id="palInfo"></p>
+    </section>
+    <section id="inspector" hidden aria-label="Selection">
+      <div class="ins-head">
+        <strong id="insTitle">Hinge</strong>
+        <button id="insClose" type="button" aria-label="Clear selection">&times;</button>
+      </div>
+      <p id="insSub"></p>
+      <div id="insKind" class="seg" role="group" aria-label="Joint type">
+        <button type="button" data-kind="hinge" aria-pressed="false">Hinge</button>
+        <button type="button" data-kind="motor" aria-pressed="false">Motor</button>
+      </div>
+      <div id="insMotor" class="fields">
+        <label for="insSpeedNum">Speed, rpm <span id="insSpeedVal"></span></label>
+        <div class="pair">
+          <input id="insSpeed" type="range" min="-120" max="120" step="5" value="30" aria-label="Speed slider">
+          <input id="insSpeedNum" type="text" inputmode="decimal" autocomplete="off">
+        </div>
+        <label for="insStrengthNum">Strength, N&middot;m</label>
+        <div class="pair">
+          <input id="insStrength" type="range" min="0" max="100" step="1" value="40" aria-label="Strength slider">
+          <input id="insStrengthNum" type="text" inputmode="decimal" autocomplete="off">
+        </div>
+        <p class="note">Type any value. Strength takes "inf".</p>
+      </div>
+      <div id="insDev" class="fields" hidden>
+        <label id="insDevLabel" for="insDevNum">Setting</label>
+        <div class="pair">
+          <input id="insDevRange" type="range" min="0" max="100" step="1" value="100" aria-label="Setting slider">
+          <input id="insDevNum" type="text" inputmode="decimal" autocomplete="off">
+        </div>
+      </div>
+      <div id="insSense" class="seg" role="group" aria-label="Sensor type" hidden>
+        <button type="button" data-sense="12" aria-pressed="false">Heat</button>
+        <button type="button" data-sense="13" aria-pressed="false">Pressure</button>
+        <button type="button" data-sense="14" aria-pressed="false">Touch</button>
+      </div>
+      <div id="insDir" class="seg" role="group" aria-label="Facing" hidden>
+        <button type="button" data-face="2" aria-pressed="false" aria-label="Facing left">&larr;</button>
+        <button type="button" data-face="3" aria-pressed="false" aria-label="Facing up">&uarr;</button>
+        <button type="button" data-face="4" aria-pressed="false" aria-label="Facing down">&darr;</button>
+        <button type="button" data-face="1" aria-pressed="false" aria-label="Facing right">&rarr;</button>
+      </div>
+      <div id="insSpring" class="fields" hidden>
+        <label for="insHz">Stiffness, bounces a second</label>
+        <input id="insHz" type="text" inputmode="decimal" autocomplete="off">
+        <label for="insDamp">Damping, 0 to 1</label>
+        <input id="insDamp" type="text" inputmode="decimal" autocomplete="off">
+        <label for="insLen">Length, cells</label>
+        <input id="insLen" type="text" inputmode="decimal" autocomplete="off">
+      </div>
+      <div id="insSwitch" class="seg" role="group" aria-label="Switch" hidden>
+        <button type="button" data-on="1" aria-pressed="false">On</button>
+        <button type="button" data-on="0" aria-pressed="false">Off</button>
+      </div>
+      <div id="insRotate" class="row">
+        <button id="rotL" type="button">&#x27F2; 15&deg;</button>
+        <button id="rotR" type="button">&#x27F3; 15&deg;</button>
+      </div>
+      <button id="insDelete" type="button" class="danger">Delete</button>
+    </section>
+  </div>
+</main>
+<footer>
+  <span id="hint"></span>
+  <span id="readout">&nbsp;</span>
+</footer>
+
