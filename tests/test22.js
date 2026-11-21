@@ -1,7 +1,6 @@
 // springs: a block hung from the background bounces and settles; a spring between two parts; rewind keeps it
-global.planck = require('planck');
-const fs = require('fs');
-const Sim = new Function(fs.readFileSync(__dirname + '/../src/sim.js', 'utf8') + '\nreturn Sim;')();
+import * as planck from 'planck';
+import { Sim } from '../src/sim/index.js';
 const { W, H, S } = Sim;
 Sim.loadPreset('blank');
 const blk = Sim.addBody(Sim.cellsRect(100, 60, 109, 67), Sim.ID.Fe);

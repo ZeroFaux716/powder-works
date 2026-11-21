@@ -1,6 +1,5 @@
-global.planck = require('planck');
-const fs = require('fs');
-const Sim = new Function(fs.readFileSync(__dirname + '/../src/sim.js', 'utf8') + '\nreturn Sim;')();
+import * as planck from 'planck';
+import { Sim } from '../src/sim/index.js';
 const { W, H, ID, MATS, S } = Sim;
 Sim.loadPreset('components');
 const cnt = (key, x0, y0, x1, y1) => { let n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (Sim.type[y * W + x] === ID[key] && Sim.st[y * W + x]) n++; return n; };

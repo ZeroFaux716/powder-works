@@ -1,6 +1,5 @@
-global.planck = require('planck');
-const fs = require('fs');
-const Sim = new Function(fs.readFileSync(__dirname + '/../src/sim.js', 'utf8') + '\nreturn Sim;')();
+import * as planck from 'planck';
+import { Sim } from '../src/sim/index.js';
 const { W, H, ID } = Sim;
 const count = (key, state) => { let n = 0; for (let i = 0; i < W * H; i++) if (Sim.type[i] === ID[key] && (state === undefined || Sim.st[i] === state)) n++; return n; };
 Sim.loadPreset('thermite');

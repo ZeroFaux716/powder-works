@@ -1,7 +1,6 @@
 // Reaction bench: pairs of elements meeting in a sealed box, optionally heated.
-global.planck = require('planck');
-const fs = require('fs');
-const Sim = new Function(fs.readFileSync(process.argv[2] || (__dirname + '/../src/sim.js'), 'utf8') + '\nreturn Sim;')();
+import * as planck from 'planck';
+import { Sim } from '../src/sim/index.js';
 const { W, H, ID, MATS } = Sim;
 function box(a, b, heat, secs, split) {
   Sim.loadPreset('blank');

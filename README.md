@@ -15,7 +15,13 @@ hinges, motors, sliders and springs.
 ## Layout
 
 - `index.html`: the page's markup
-- `src/sim.js`: the simulation (no DOM; runs in Node for the tests)
+- `src/sim/`: the simulation, as ES modules (no DOM; runs in Node for the tests):
+  - `constants.js`, `materials.js`, `chemdata.js`, `tables.js`: the data
+  - `grid.js`: the cell arrays, the physics world, and `G`, the shared state several modules change
+  - `reactions.js` (heat, burning, chemistry, distilling), `electrics.js`, `neutrons.js`, `cells.js` (each cell's own update)
+  - `flow.js` (pressure, gas and heat flow), `parts.js` (rigid parts), `joints.js`
+  - `world.js` (one step, snapshots), `editing.js` (painting and filling), `scenes.js`
+  - `index.js`: re-exports everything, plus the `Sim` object the tests use
 - `src/ui.js`: the page's behaviour; `src/style.css`: its look
 - `src/main.js` and `vite.config.js`: the entry point. For now the simulation and the page share one scope
   (the page reads the simulation's arrays directly), so the config joins them into one module.

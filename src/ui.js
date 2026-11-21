@@ -1,3 +1,17 @@
+// The page: drawing the bench, the toolbar and palette, mouse and keys, undo, save and open.
+import * as planck from 'planck';
+import { AMBIENT, DRAFT, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, POWDER, S, SOL, STATIC, W } from './sim/constants.js';
+import { ID, MATS } from './sim/materials.js';
+import { FIRE, SMOKE, stateAt } from './sim/tables.js';
+import { CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, LP, PLUG, PUMP, SENSE_C, SENSE_P, SENSE_T, SWITCH, VALVE, WIRE, bid, bodies, ddir, dset, fan, gate, life, lit, open, ox, st, type } from './sim/grid.js';
+import { made } from './sim/reactions.js';
+import { nFast, nX, nY } from './sim/neutrons.js';
+import { FX, FY, P, temp } from './sim/flow.js';
+import { bodiesAt, removeBody } from './sim/parts.js';
+import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, removeJoint, setJointKind, setMotor, setSpring, snapPoint, springEnds, ungrab } from './sim/joints.js';
+import { restore, snapshot, step } from './sim/world.js';
+import { addBody, cellsRect, finishPart, paint } from './sim/editing.js';
+import { loadPreset } from './sim/scenes.js';
 
 // ---------- rendering and input ----------
 const canvas = document.getElementById('view');
@@ -184,7 +198,7 @@ function render() {
     px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
   }
   // neutrons in flight: fast ones white, slowed ones green
-  for (let n = 0; n < nCount; n++) {
+  for (let n = 0; n < G.nCount; n++) {
     const o = ((nY[n] | 0) * W + (nX[n] | 0)) * 4;
     if (nFast[n]) { px[o] = 235; px[o + 1] = 255; px[o + 2] = 250; }
     else { px[o] = 90; px[o + 1] = 240; px[o + 2] = 150; }
@@ -888,7 +902,7 @@ function setTool(name) {
 }
 document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
 function setFanDir(d) {
-  fanDir = d; paintDir = d;
+  fanDir = d; G.paintDir = d;
   document.querySelectorAll('[data-dir]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.dir === d ? 'true' : 'false'));
 }
 document.querySelectorAll('[data-dir]').forEach(b => b.addEventListener('click', () => { setFanDir(+b.dataset.dir); if (tool !== 'inverter' && tool !== 'pump') setTool('fan'); }));
@@ -967,9 +981,9 @@ function frame() {
   if (sel && ((sel.rb && !bodies.has(sel.rb.id)) || (sel.rec && !jrecs.includes(sel.rec)) || (sel.dev && fan[sel.cells[0]] !== sel.dev))) select(null);
   snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapPoint(hoverFX, hoverFY) : null;
   render();
-  const news = madeNews;
+  const news = G.madeNews;
   if (news !== null) {
-    madeNews = null;
+    G.madeNews = null;
     if (MATS[news].gen) setHint('New compound: ' + MATS[news].name + ' (' + MATS[news].sym + '). It is in Materials under Made so far.');
     showMade();
   }
@@ -980,8 +994,8 @@ function frame() {
       const fd = fan[i];
       const over = fd >= CONTACT ? devName(i) + (lit[i] >= 4 ? ' (live)' : '') + ' \u00b7 ' : fd && !SOL[st[i]] ? 'Fan \u00b7 ' : '';
       const burnt = st[i] === NONE && ox[i] < 0.95 ? ' (' + Math.round(100 - ox[i] * 100) + '% burnt)' : '';
-      readoutEl.textContent = (nCount ? nCount + ' neutrons \u00b7 ' : '') + over + label(type[i], st[i]) + burnt + ' · ' + Math.round(temp[i]) + ' °C' + p;
-    } else readoutEl.textContent = nCount ? nCount + ' neutrons' : ' ';
+      readoutEl.textContent = (G.nCount ? G.nCount + ' neutrons \u00b7 ' : '') + over + label(type[i], st[i]) + burnt + ' · ' + Math.round(temp[i]) + ' °C' + p;
+    } else readoutEl.textContent = G.nCount ? G.nCount + ' neutrons' : ' ';
   }
   requestAnimationFrame(frame);
 }
@@ -1129,7 +1143,7 @@ edgesBtn.addEventListener('click', () => {
   const open = edgesBtn.getAttribute('aria-pressed') !== 'true';
   edgesBtn.setAttribute('aria-pressed', open ? 'true' : 'false');
   edgesBtn.textContent = open ? 'Edges: open' : 'Edges: walled';
-  setOpenEdges(open);
+  G.openEdges = open;
   setHint(open ? 'Anything loose that reaches the edge of the bench leaves it.' : 'The edges of the bench hold everything in, like walls.');
 });
 
