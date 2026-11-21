@@ -974,6 +974,13 @@ window.addEventListener('keydown', ev => {
   else if (k === 'escape') { if (!palette.hidden) openPalette(false); else select(null); }
 });
 
+// ---------- version ----------
+// Filled in by the build (vite.config.js): package.json's version, the commit, and the build time.
+const APP_VERSION = __APP_VERSION__;
+const versionEl = document.getElementById('version');
+versionEl.textContent = 'v' + APP_VERSION + ' \u00b7 ' + __COMMIT__;
+versionEl.title = __COMMIT__ === 'dev' ? 'Running from the dev server' : 'Built ' + new Date(__BUILT__).toLocaleString();
+
 let frameNo = 0;
 function frame() {
   if (down && BRUSHED[tool] && tool !== 'part') dab(lastX, lastY);
@@ -1077,7 +1084,7 @@ async function gzip(text, back) {
 // The file is a small JSON wrapper around the compressed bench, so it travels as an ordinary .json file.
 async function saveBench() {
   try {
-    const data = { app: 'powder-works', version: SAVE_VERSION, W, H, scene: preset, mats: MATS.map(m => m.key), snap: encodeValue(snapshot()) };
+    const data = { app: 'powder-works', version: SAVE_VERSION, game: APP_VERSION, W, H, scene: preset, mats: MATS.map(m => m.key), snap: encodeValue(snapshot()) };
     const packed = new Uint8Array(await (await gzip(JSON.stringify(data))).arrayBuffer());
     let bin = '';
     for (let k = 0; k < packed.length; k += 0x8000) bin += String.fromCharCode.apply(null, packed.subarray(k, k + 0x8000));

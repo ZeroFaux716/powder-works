@@ -167,6 +167,7 @@ footer {
 footer span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #hint { color: var(--flame); flex: 1 1 auto; min-width: 0; }
 #readout { color: var(--dim); flex: none; width: 54ch; text-align: right; }
+#version { color: var(--dim); flex: none; opacity: 0.7; font-size: 11px; }
 @media (max-width: 640px) {
   main { flex-direction: column; }
   #tools { flex-direction: row; flex-wrap: wrap; width: auto; overflow: visible; }

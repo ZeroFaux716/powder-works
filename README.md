@@ -42,3 +42,11 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
     npm run dev        # live-reloading copy at http://localhost:5173
     npm run build      # the deployable page in dist/
     npm run preview    # serve dist/ to check the build
+
+## Versions
+
+The version lives in `package.json` and shows in the bottom-right corner with the commit the site was built
+from (hover it for the build time). Bump the last number for fixes (0.1.0 → 0.1.1) and the middle one for new
+features (0.1.0 → 0.2.0), then tag the commit: `git tag v0.2.0 && git push origin v0.2.0`. Save files carry
+their own format number (`version`), which only changes when the save layout does, plus the game version that
+wrote them (`game`).
