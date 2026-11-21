@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, S, ID } = Sim;
 const run = n => { for (let f = 0; f < n; f++) Sim.step(); };
 Sim.loadPreset('wind');

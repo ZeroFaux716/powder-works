@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, S, ID } = Sim;
 const secs = +(process.argv[3] || 30);
 Sim.loadPreset('engine');

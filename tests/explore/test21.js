@@ -1,6 +1,6 @@
 // placeable components: thermostat loop, pump, electrolysis, pressure sensor
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, ID, MATS } = Sim;
 const dev = (x, y, tool, setting, dir) => { if (dir) Sim.setPaintDir(dir); Sim.paint(x, y, tool, 0, setting); };
 const run = n => { for (let f = 0; f < n; f++) Sim.step(); };

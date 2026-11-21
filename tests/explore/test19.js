@@ -1,6 +1,6 @@
 // Second-step chemistry bench: compounds meeting a third substance.
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, ID, MATS } = Sim;
 function box(a, b, heat, secs, mix) {
   Sim.loadPreset('blank');

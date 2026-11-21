@@ -25,7 +25,13 @@ hinges, motors, sliders and springs.
 - `src/ui.js`: the page's behaviour; `src/style.css`: its look
 - `src/main.js` and `vite.config.js`: the entry point. For now the simulation and the page share one scope
   (the page reads the simulation's arrays directly), so the config joins them into one module.
-- `tests/`: headless scene tests (`node tests/test15.js` runs the engine)
+- `tests/checks/`: self-checking tests. `npm test` runs them all (under 3 minutes) and reports pass or fail
+  for each: every material simulates cleanly, gases layer, edges, springs and Rewind, the engine and crank,
+  compounds and acids, thermite, the refinery's jars, the components scene, hydraulics, the fan wheel, the
+  diesel hammer, and critical mass. Math.random is seeded, so a run gives the same numbers every time.
+  `node --test tests/checks/engine.test.js` runs one file.
+- `tests/explore/`: the older scripts that print measurements rather than pass or fail, handy when tuning
+  (`node tests/explore/test15.js` prints the engine's rpm, firings and fuel every 2 s)
 - `tools/`: generators for the element and chemistry data tables (from Periodic-Table-JSON)
 
 ## Running

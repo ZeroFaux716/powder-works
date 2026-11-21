@@ -1,6 +1,6 @@
 // refinery: temperatures up the column and where each fraction ends up
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, ID, MATS } = Sim;
 const secs = +(process.argv[3] || 60);
 Sim.loadPreset('refinery');

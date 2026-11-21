@@ -1,6 +1,6 @@
 // Reaction bench: pairs of elements meeting in a sealed box, optionally heated.
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, ID, MATS } = Sim;
 function box(a, b, heat, secs, split) {
   Sim.loadPreset('blank');

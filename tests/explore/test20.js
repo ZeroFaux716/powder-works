@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Sim } from '../src/sim/index.js';
+import { Sim } from '../../src/sim/index.js';
 const { W, H, ID, MATS } = Sim;
 Sim.loadPreset('chem');
 const count = (x0, y0, x1, y1) => { const c = {}; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * W + x; if (Sim.st[i] === 0 || Sim.type[i] === ID.wall) continue; const m = MATS[Sim.type[i]]; const k = m.sym || m.name; c[k] = (c[k] || 0) + 1; } return Object.entries(c).sort((p, q) => q[1] - p[1]).slice(0, 7).map(([k, v]) => k + ' ' + v).join(', '); };
