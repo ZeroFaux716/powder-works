@@ -12,6 +12,8 @@ hinges, motors, sliders and springs.
 - Scenes: a two-stroke engine, an oil refinery, a chemistry bench, a reactor and more
 - Undo/redo, save/open, five views (materials, pressure, heat, flow, burnt gas)
 
+Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
+
 ## Layout
 
 - `index.html`: the page's markup
