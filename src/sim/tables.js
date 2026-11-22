@@ -8,6 +8,10 @@ export const NM = MATS.length;
 export const MELT = new Float32Array(NM), BOIL = new Float32Array(NM), IGN = new Float32Array(NM);
 export const CAPS = new Float32Array(NM), LF = new Float32Array(NM), LV = new Float32Array(NM), GASP = new Float32Array(NM), SOLIDST = new Uint8Array(NM);
 export const PARTRX = new Uint8Array(NM), NOCOND = new Uint8Array(NM);
+// How strongly the boiling point moves with pressure (Clausius-Clapeyron with Trouton's rule): 1 / Trouton's
+// constant in units of R. About 1/10.5 for most liquids; water, held together by hydrogen bonds, is 1/13.1.
+// Fuels are left at a fixed boiling point: their vapour is tuned for engines and the refinery as it is.
+export const TROUT = new Float32Array(NM);
 export const HALV = new Float32Array(NM), REACTV = new Float32Array(NM), RX = new Uint8Array(NM);
 export const CONDS = new Float32Array(NM), CONDG = new Float32Array(NM), DENS = new Float32Array(NM), LIFT = new Int8Array(NM);
 for (const m of MATS) {
@@ -23,6 +27,7 @@ for (const m of MATS) {
   LF[m.id] = locked ? 1e9 : m.lfDeg * m.cap;
   LV[m.id] = locked ? 1e9 : m.lvDeg * m.cap;
   GASP[m.id] = m.gasP;
+  TROUT[m.id] = locked || m.vapor ? 0 : 1 / (m.trouton || 10.5);
   SOLIDST[m.id] = m.powder ? POWDER : STATIC;
   IGN[m.id] = m.burn ? m.burn.at : 1e9;
   CONDS[m.id] = m.cond !== undefined ? m.cond : 0.04 + 0.18 * Math.min(1, Math.log10(1 + m.k) / 2.604);

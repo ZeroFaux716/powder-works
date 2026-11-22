@@ -2,19 +2,28 @@
 import { CAPG, DRAFT, FLAME_GAIN, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, SOL, STATIC, W } from './constants.js';
 import { ID, MATS } from './materials.js';
 import { CRUDE_CUTS, NE0, PAIR_A, PAIR_ACT, PAIR_HEAT, PAIR_PRODUCT, PAIR_RATE, PAIR_RATIO, TAR } from './chemdata.js';
-import { ACID_OF, ACID_X, BASE_METAL, BOIL, CAPS, CARBON, CPDI, ENV, FIRE, GASP, HYD, HYDROXIDE, LF, LV, MELT, METAL, NOCOND, OX, OXIDE_OF, RUST, SOLIDST, WATER, stateAt } from './tables.js';
-import { G, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
+import { ACID_OF, ACID_X, BASE_METAL, BOIL, CAPS, CARBON, CPDI, ENV, FIRE, GASP, HYD, HYDROXIDE, LF, LV, MELT, METAL, NOCOND, OX, OXIDE_OF, RUST, SOLIDST, TROUT, WATER, stateAt } from './tables.js';
+import { G, LP, Pref, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
 import { P, temp } from './flow.js';
 import { cur } from './world.js';
+
+// The boiling point at pressure p: higher under pressure (water boils at about 120 °C at 2 atm and 180 °C at
+// 10 atm, which is what lets a boiler hold a steady pressure), lower in a vacuum.
+export function boilAt(t, p) {
+  const b = BOIL[t], k = TROUT[t];
+  if (k === 0 || (p > 0.98 && p < 1.02)) return b;
+  const r = p < 0.02 ? 0.02 : p > 200 ? 200 : p;
+  return (b + 273.15) / (1 - k * Math.log(r / P0)) - 273.15;
+}
 
 export function phase(i, t, s) {
   const T = temp[i];
   if (s === GAS) {
-    const b = BOIL[t];
+    const b = boilAt(t, P[i]);
     if (T < b) {
       if (NOCOND[t]) return GAS;                   // vapour thinned out in air stays vapour
       lat[i] += (b - T) * CAPG; temp[i] = b;
-      if (lat[i] >= LV[t]) { lat[i] = 0; P[i] = Math.max(0, P[i] - GASP[t]); return LIQUID; }
+      if (lat[i] >= LV[t]) { lat[i] = 0; P[i] = Math.max(0, P[i] - GASP[t]); Pref[i] = P[i]; return LIQUID; }
     } else if (lat[i] > 0) {
       const d = Math.min(lat[i], (T - b) * CAPG);
       lat[i] -= d; temp[i] = T - d / CAPG;
@@ -23,11 +32,11 @@ export function phase(i, t, s) {
   }
   const c = CAPS[t];
   if (s === LIQUID) {
-    const b = BOIL[t], m = MELT[t];
+    const b = boilAt(t, P[i] + LP[i]), m = MELT[t];
     if (T > b) {
       if (lat[i] < 0) lat[i] = 0;
       lat[i] += (T - b) * c; temp[i] = b;
-      if (lat[i] >= LV[t]) { lat[i] = 0; P[i] += GASP[t]; return GAS; }
+      if (lat[i] >= LV[t]) { lat[i] = 0; P[i] += GASP[t]; Pref[i] = P[i]; return GAS; }
     } else if (T < m) {
       if (lat[i] > 0) lat[i] = 0;
       lat[i] -= (m - T) * c; temp[i] = m;

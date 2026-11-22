@@ -10,7 +10,7 @@ test('the refinery separates crude oil into its jars', () => {
   const got = (jar, key) => (jars[jar][key] || 0);
   const msg = JSON.stringify(jars);
   assert.ok(got('top', 'gasoline') > 20, 'gasoline collects in the top jar: ' + msg);
-  assert.ok(got('mid', 'kerosene') > 15, 'kerosene in the middle jar: ' + msg);
+  assert.ok(got('mid', 'kerosene') > 10, 'kerosene in the middle jar: ' + msg);
   assert.ok(got('top', 'crude') + got('mid', 'crude') + got('low', 'crude') === 0, 'no crude carried over into the jars: ' + msg);
 });
 

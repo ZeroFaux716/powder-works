@@ -1,8 +1,8 @@
 // The grid of cells, the physics world, and the shared state object G.
 import * as planck from 'planck';
-import { GRAVITY, H, N, NONE, P0, W } from './constants.js';
+import { GRAVITY, H, LIQUID, N, NONE, P0, W } from './constants.js';
 import { need } from './reactions.js';
-import { temp } from './flow.js';
+import { P, temp } from './flow.js';
 import { cur } from './world.js';
 
 // Shared state that several modules change. (ES module bindings can only be changed by their own module,
@@ -71,6 +71,14 @@ export function swap(i, j) {
   const q = lat[i]; lat[i] = lat[j]; lat[j] = q;
   const nd = need[i]; need[i] = need[j]; need[j] = nd;
   stamp[i] = cur; stamp[j] = cur;
+  // Pressure belongs to the square, but the gas in a bubble rising through liquid (or the air a falling drop
+  // displaces) must take its pressure with it: liquid holds a tiny fraction of what gas does, so pressure left
+  // behind in a square that liquid moves into would vanish. Fresh air travels with the gas the same way.
+  if ((st[i] === LIQUID) !== (st[j] === LIQUID)) {
+    const p = P[i]; P[i] = P[j]; P[j] = p;
+    const r = Pref[i]; Pref[i] = Pref[j]; Pref[j] = r;
+    const o = ox[i]; ox[i] = ox[j]; ox[j] = o;
+  }
 }
 
 export function clearCell(i) { type[i] = 0; st[i] = NONE; life[i] = 0; aux[i] = 0; lat[i] = 0; need[i] = 0; }

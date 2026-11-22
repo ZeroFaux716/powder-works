@@ -298,7 +298,28 @@ export function advectAir() {
   for (let y = 0; y < H; y++) { ox[y * W] = 1; ox[y * W + W - 1] = 1; }
 }
 
+// Which squares of gas or liquid connect to the edge of the world: the outside air, which can carry heat away.
+// Air sealed inside a box, a cylinder or a boiler is not outdoors, so it only loses heat through its walls.
+// Worked out by a flood fill from the edges every few frames (walls rarely change faster than that).
+export const outdoors = new Uint32Array(N), outQ = new Int32Array(N);
+export let outGen = 0;
+export function findOutdoors() {
+  outGen++;
+  let head = 0, tail = 0;
+  const seed = i => { if (outdoors[i] !== outGen && !SOL[st[i]]) { outdoors[i] = outGen; outQ[tail++] = i; } };
+  for (let x = 0; x < W; x++) { seed(x); seed((H - 1) * W + x); }
+  for (let y = 1; y < H - 1; y++) { seed(y * W); seed(y * W + W - 1); }
+  while (head < tail) {
+    const i = outQ[head++], x = i % W;
+    if (x > 0) seed(i - 1);
+    if (x < W - 1) seed(i + 1);
+    if (i >= W) seed(i - W);
+    if (i < N - W) seed(i + W);
+  }
+}
+
 export function diffuseHeat() {
+  if ((tick & 7) === 0 || outGen === 0) findOutdoors();
   // Heat flows between neighbours at the rate the worse conductor allows, and each cell warms by
   // the energy it received divided by its own heat capacity.
   for (let i = 0; i < N; i++) {
@@ -319,7 +340,7 @@ export function diffuseHeat() {
       k = cnd[i + W]; acc += (k < c ? k : c) * (temp[i + W] - t0);
       let t = t0 + acc / cpc[i];
       const s = st[i];
-      if (s === NONE && ox[i] > 0.3) t += (AMBIENT - t) * AIR_COOL;   // (the gas sealed inside equipment has no room to lose its heat to)
+      if (s === NONE && ox[i] > 0.3 && outdoors[i] === outGen) t += (AMBIENT - t) * AIR_COOL;   // (air sealed inside anything only loses heat through its walls)
       temp2[i] = t;
       // gas law: heating gas in place raises its pressure, cooling lowers it
       if ((s === NONE || s === GAS) && (type[i] !== FIRE || aux[i] === NOTHING) && t !== t0) {

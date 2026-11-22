@@ -17,7 +17,7 @@ def('air', 'Air', { melt: -1e9, boil: -1e9, k: 0.026, cond: 0.01, color: [11, 15
 def('wall', 'Wall', { fixed: true, cond: 0.08, dens: 9, cap: 0.6, color: [107, 114, 125] });
 def('fire', 'Fire', { special: 'fire', color: [255, 138, 42], lift: 1 });
 def('smoke', 'Smoke', { special: 'smoke', color: [84, 86, 92], lift: 1 });
-def('water', 'Water', { sym: 'H₂O', melt: 0, boil: 100, dens: 1, k: 0.6, cond: 0.15, color: [59, 127, 217], gasColor: [196, 209, 222], solidColor: [176, 208, 238], lift: 1, gasP: 6, cap: 1, lf: 80, lv: 540, names: ['Ice', 'Water', 'Steam'] });
+def('water', 'Water', { sym: 'H₂O', melt: 0, boil: 100, dens: 1, k: 0.6, cond: 0.15, color: [59, 127, 217], gasColor: [196, 209, 222], solidColor: [176, 208, 238], lift: 1, gasP: 15, cap: 1, lf: 80, lv: 540, trouton: 13.1, names: ['Ice', 'Water', 'Steam'] });
 def('sand', 'Sand', { sym: 'SiO₂', melt: 1713, boil: 2950, dens: 2.65, k: 1, cap: 0.45, soft: true, powder: true, color: [217, 183, 106], solidColor: [188, 210, 204], names: ['Glass', 'Molten glass', 'Silica vapor'] });
 def('gasoline', 'Gasoline', { melt: -60, boil: 150, dens: 0.75, k: 0.15, cond: 0.12, cap: 0.4, lf: 40, lv: 160, color: [168, 194, 58], gasColor: [196, 204, 120], gasP: 3, lift: -1, vapor: true, fades: 0.01, burn: { at: 280, fast: true, heat: 1500, life: 6, units: 64, }, names: ['Frozen gasoline', 'Gasoline', 'Gasoline vapor'] });
 
