@@ -1,8 +1,8 @@
 // Changes of state, burning, chemistry, distilling and condensing, water and metals.
 import { CAPG, DRAFT, FLAME_GAIN, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, SOL, STATIC, W } from './constants.js';
 import { ID, MATS } from './materials.js';
-import { CRUDE_CUTS, NE0, PAIR_A, PAIR_ACT, PAIR_HEAT, PAIR_PRODUCT, PAIR_RATE, PAIR_RATIO, TAR } from './chemdata.js';
-import { BREAK, DROP, FORM, RISE, tbin } from './energy.js';
+import { CRUDE_CUTS, NE0, PAIR_A, PAIR_PRODUCT, PAIR_RATIO, TAR } from './chemdata.js';
+import { BREAK, DROP, FORM, RISE, swapChance, swapHeat, tbin } from './energy.js';
 import { ACID_OF, ACID_X, BASE_METAL, BOIL, CAPS, CARBON, CPDI, ENV, FIRE, GASP, HYD, HYDROXIDE, LF, LV, MELT, METAL, NOCOND, OX, OXIDE_OF, RUST, SOLIDST, TROUT, WATER, stateAt } from './tables.js';
 import { G, LP, Pref, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
 import { P, temp } from './flow.js';
@@ -246,15 +246,14 @@ export function chemReact(i, x, y, t) {
   }
   return false;
 }
-// How likely two elements meeting at temperature T are to combine this frame: from the energy tables (only if
-// it lowers the Gibbs energy, at the Arrhenius rate), or the old hand-set numbers for a compound without them.
+// How likely two elements meeting at temperature T are to combine this frame (energy.js: only if it lowers the
+// Gibbs energy, at the Arrhenius rate; a compound without energy data does not form)
 export function formChance(pk, pid, T) {
   const f = FORM[pid];
-  if (f) return f[tbin(T)];
-  return T < PAIR_ACT[pk] ? 0 : PAIR_RATE[pk];
+  return f ? f[tbin(T)] : 0;
 }
 // the temperature rise of forming it, per atom-sized cell taking part
-const riseAt = (pk, pid, T) => RISE[pid] ? RISE[pid][tbin(T)] : PAIR_HEAT[pk];
+const riseAt = (pk, pid, T) => RISE[pid] ? RISE[pid][tbin(T)] : 0;
 export function combine(i, n, t, tn, pk, pid, ia) {
   // the compound forms in the place of the element it has more atoms of; the other cell is used up
   const r = PAIR_RATIO[pk];
@@ -310,37 +309,30 @@ export function cpdReact(i, x, y, t) {
     if (ACID_OF[t] && tn === WATER && sn === LIQUID) { swapTo(n, ACID_OF[t], temp[n] + 40); useUp(i); return true; }
     if (t === WATER || tn >= NE0 || isNaN(ENV[tn])) continue;
     const A = info.A, B = info.B;
-    if (A === HYD) continue;
-    // a metal that holds the other element harder takes it over and frees the first one
-    if (METAL[tn] && tn !== A) {
-      const pk = tn * NE0 + B, prod = PAIR_PRODUCT[pk];
-      if (prod && ENV[A] - ENV[tn] > 0.15 && T >= Math.max(400, PAIR_ACT[pk]) && Math.random() < 0.2) {
-        const heat = Math.max(60, PAIR_HEAT[pk] - info.heat);
-        swapTo(n, prod, T + heat); swapTo(i, A, T + heat);
-        return true;
-      }
-    }
-    if (B !== OX) continue;
-    // smelting: carbon takes the oxygen from the oxide of a not-too-reactive metal at furnace heat
-    if (tn === CARBON && ENV[OX] - ENV[A] < 1.9 && T >= 1000 && Math.random() < 0.05) {
-      swapTo(i, A, T - 80); swapTo(n, PAIR_PRODUCT[CARBON * NE0 + OX], T - 80);
-      return true;
-    }
-    // hot hydrogen does the same to the oxides of the less reactive metals, leaving water
-    if (tn === HYD && ENV[OX] - ENV[A] < 1.6 && T >= 300 && Math.random() < 0.1) {
-      swapTo(i, A, T); swapTo(n, WATER, T);
-      return true;
-    }
+    // compounds of hydrogen (water, the hydrogen halides) are left to the water and acid rules
+    if (A === HYD || tn === A || tn === B) continue;
+    // Swapping partners, by energy: the element takes over this compound's electron-taker (carbon smelting
+    // iron oxide, aluminium in thermite, zinc taking chlorine from copper chloride, hydrogen stripping copper
+    // oxide), or its electron-giver (chlorine driving bromine out of a bromide, oxygen roasting a sulfide),
+    // when the compound it would make holds that element more tightly, per atom, than this one does.
+    let to = 0, side = '', freed = 0;
+    const kB = tn * NE0 + B, kA = A * NE0 + tn;
+    if (PAIR_PRODUCT[kB] && PAIR_A[kB] === tn) { to = PAIR_PRODUCT[kB]; side = 'B'; freed = A; }
+    else if (PAIR_PRODUCT[kA] && PAIR_A[kA] === A) { to = PAIR_PRODUCT[kA]; side = 'A'; freed = B; }
+    if (!to || !(Math.random() < swapChance(t, to, side, T))) continue;
+    const d = swapHeat(t, to, side, T);
+    swapTo(n, to, T + d); swapTo(i, freed, T + d);
+    return true;
   }
   return false;
 }
 // A compound short of one of its elements takes it in from a neighbour, and an unstable one falls apart when hot.
 export function chemCompound(i, x, y, t, info) {
   const brk = BREAK[t];
-  if (brk ? Math.random() < brk[tbin(temp[i])] : temp[i] > info.dec && Math.random() < 0.05) {
+  if (brk && Math.random() < brk[tbin(temp[i])]) {
     // back to its elements: this cell becomes the giver, and a free neighbour takes the other one if there is
     // room; falling apart takes back the heat that forming it gave off
-    const T = brk ? Math.max(-200, temp[i] - DROP[t][tbin(temp[i])]) : temp[i];
+    const T = Math.max(-200, temp[i] - DROP[t][tbin(temp[i])]);
     type[i] = info.A; life[i] = 0; aux[i] = 0; lat[i] = 0; need[i] = 0;
     st[i] = stateAt(MATS[info.A], T); stamp[i] = cur;
     for (let k = 0; k < 4; k++) {
@@ -358,7 +350,7 @@ export function chemCompound(i, x, y, t, info) {
     const n = i + NB[k];
     if (type[n] !== want || st[n] === NONE || st[n] === DRAFT || stamp[n] === cur) continue;
     useUp(n);
-    temp[i] += RISE[t] ? RISE[t][tbin(temp[i])] : info.heat * 0.5;
+    if (RISE[t]) temp[i] += RISE[t][tbin(temp[i])];
     const left = nd > 0 ? nd - 1 : nd + 1;
     need[i] = (nd > 0 ? left > 0.01 : left < -0.01) ? left : 0;
     if (st[i] !== PART) st[i] = stateAt(MATS[t], temp[i]);

@@ -52,3 +52,42 @@ test('heat comes from the energy released: sodium and chlorine burn far hotter t
   const nacl = peak('Na', 'Cl', 20), fes = peak('Fe', 'S', 550);
   assert.ok(nacl - 20 > 2 * (fes - 550), `Na + Cl rose to ${nacl.toFixed(0)} °C from 20; Fe + S to ${fes.toFixed(0)} °C from 550`);
 });
+
+// two materials mixed checkerboard-wise in a sealed box, held at T
+function mix(a, b, T, seconds = 3) {
+  box(62, 62, 179, 119);
+  for (let y = 90; y <= 119; y++) for (let x = 62; x <= 179; x++) Sim.paint(x, y, 'brush', 0, (x + y) % 2 ? ID[a] : ID[b], true);
+  for (let f = 0; f < seconds * 60; f++) { for (let y = 62; y <= 119; y++) for (let x = 62; x <= 179; x++) Sim.temp[y * W + x] = T; Sim.step(); }
+  return tally(62, 62, 179, 119);
+}
+
+test('swapping partners follows the energy: carbon smelts iron oxide but not alumina', () => {
+  const fe = mix('rust', 'C', 900), al = mix('cpd_Al2O3', 'C', 1500);
+  assert.ok((fe.Fe || 0) > 100, `iron from rust and carbon at 900 °C: ${fe.Fe || 0}`);
+  assert.equal(al.Al || 0, 0, 'aluminium from alumina and carbon at 1500 °C');
+});
+
+test('hydrogen strips copper oxide but not zinc oxide at 700 °C', () => {
+  const cu = mix('cpd_CuO', 'H', 700), zn = mix('cpd_ZnO', 'H', 700);
+  assert.ok((cu.Cu || 0) > 50, `copper freed: ${cu.Cu || 0}`);
+  assert.equal(zn.Zn || 0, 0, 'zinc freed');
+});
+
+test('displacement only runs downhill', () => {
+  const fwd = mix('cpd_CuCl2', 'Zn', 300), back = mix('cpd_ZnCl2', 'Cu', 300);
+  assert.ok((fwd.Cu || 0) > 100, `zinc frees copper from copper chloride: ${fwd.Cu || 0}`);
+  assert.equal(back.Zn || 0, 0, 'copper never frees zinc from zinc chloride');
+  const br = mix('cpd_NaBr', 'Cl', 20), cl = mix('salt', 'Br', 20);
+  assert.ok((br.Br || 0) > 50, `chlorine drives bromine out of sodium bromide: ${br.Br || 0}`);
+  assert.equal(cl.Cl || 0, 0, 'bromine never drives chlorine out of salt');
+});
+
+test('aluminium and iron oxide give off a great deal of heat (thermite)', () => {
+  box(62, 62, 179, 119);
+  for (let y = 100; y <= 119; y++) for (let x = 62; x <= 179; x++) Sim.paint(x, y, 'brush', 0, (x + y) % 2 ? ID.Al : ID.rust, true);
+  for (let y = 62; y <= 119; y++) for (let x = 62; x <= 179; x++) Sim.temp[y * W + x] = 500;
+  let hot = 0;
+  for (let f = 0; f < 120; f++) { Sim.step(); for (let y = 62; y <= 119; y++) for (let x = 62; x <= 179; x++) hot = Math.max(hot, Sim.temp[y * W + x]); }
+  const c = tally(62, 62, 179, 119);
+  assert.ok((c.cpd_Al2O3 || 0) > 100 && hot > 1500, `alumina ${c.cpd_Al2O3 || 0}, hottest ${hot.toFixed(0)} °C`);
+});

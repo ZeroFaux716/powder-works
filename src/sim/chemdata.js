@@ -39,7 +39,6 @@ export const ANION_TINT = { O: [128, 104, 86], S: [70, 64, 48], N: [150, 140, 11
   F: [236, 236, 228], Cl: [230, 236, 214], Br: [214, 170, 120], I: [150, 110, 140], Se: [120, 60, 50], Te: [90, 90, 96], At: [60, 60, 60] };
 export const PALE_METAL = { alkali: 1, alkaline: 1, post: 1, lanthanide: 1, actinide: 1 };
 // metals so unreactive that their oxides fall apart again on gentle heating
-export const NOBLE_OXIDE = { Ag: 300, Au: 200, Pt: 450, Pd: 750, Hg: 500, Ir: 1000, Os: 400, Rh: 1000, Ru: 1000 };
 export const SUBS = '₀₁₂₃₄₅₆₇₈₉';
 export const sub = n => n === 1 ? '' : String(n).split('').map(d => SUBS[+d]).join('');
 export const PREFIX = ['', 'mono', 'di', 'tri', 'tetra', 'penta', 'hexa', 'hepta', 'octa'];
@@ -88,24 +87,9 @@ export function planCompound(a, b) {
   let kind = metal ? 'ionic' : (mA.family === 'metalloid' && (B === 'O' || B === 'N' || B === 'C')) ? 'network' : 'molecule';
   if (kind === 'ionic' && qA >= 3 && dX < 1.7 && (B === 'Cl' || B === 'Br' || B === 'I')) kind = 'molecule';   // e.g. AlCl3, TiCl4
   if (A === 'Fe' && B === 'C') kind = 'ionic';
-  // how readily it goes: what temperature it needs, how fast, how much heat it gives
-  let act;
-  if (B === 'F') act = 20;
-  else if (B === 'Cl') act = 1200 - 600 * dX;
-  else if (B === 'Br') act = 1300 - 600 * dX;
-  else if (B === 'I') act = 1400 - 600 * dX;
-  else if (B === 'O') act = 1500 - 450 * dX;
-  else if (B === 'S' || B === 'Se' || B === 'Te') act = 700 - 300 * dX;
-  else if (B === 'N') act = 1300 - 300 * dX;
-  else if (B === 'C') act = 1500 - 300 * dX;
-  else if (B === 'H') act = 600 - 100 * dX;
-  else act = 1000 - 300 * dX;
-  act = Math.max(20, Math.round(act));
-  if (B === 'O' && NOBLE_OXIDE[A] !== undefined) act = Math.max(act, 150);
-  const heat = Math.round(Math.min(3200, 150 + 420 * dX * dX));
-  const rate = Math.min(0.6, 0.02 + 0.25 * dX);
+  // (how readily it forms, how much heat it gives and when it falls apart come from its energy: energy.js)
   // the compound's own properties
-  let melt, boil, dens, color, lift = 0, soft = true, powder = false, k, cap, dec = 1e9;
+  let melt, boil, dens, color, lift = 0, soft = true, powder = false, k, cap;
   const tint = ANION_TINT[B] || [200, 200, 200];
   if (kind === 'ionic' || kind === 'network') {
     melt = Math.round(Math.min(2900, Math.max(300, 250 + 220 * qA * qB + 120 * dX)));
@@ -115,7 +99,6 @@ export function planCompound(a, b) {
     const base = PALE_METAL[mA.family] || A === 'Al' || A === 'Zn' || A === 'Mg' ? [238, 236, 230] : mA.color.map(c => c * 0.7);
     color = CPD_COLOR[plain] || base.map((c, n) => Math.round(c * 0.55 + tint[n] * 0.45));
     powder = true; k = 5; cap = 0.7;
-    if (B === 'O' && NOBLE_OXIDE[A] !== undefined) dec = NOBLE_OXIDE[A];
   } else {
     // small molecules: heavier and more lopsided ones boil higher; O-H and N-H bonds hold molecules together harder
     const hb = A === 'H' ? (B === 'O' ? 200 : B === 'N' ? 90 : B === 'F' ? 60 : 0) : 0;
@@ -126,7 +109,6 @@ export function planCompound(a, b) {
     lift = mass < 29 ? 1 : -1;
     color = CPD_COLOR[plain] || (B === 'Br' ? [150, 90, 50] : B === 'I' ? [110, 70, 120] : B === 'Cl' ? [214, 226, 180] : B === 'S' ? [222, 214, 150] : [210, 214, 220]);
     k = 0.2; cap = 0.6;
-    dec = Math.round(400 + 1100 * dX);
   }
   // name
   const nA = mA.name, an = ANION_NAME[B];
@@ -139,15 +121,15 @@ export function planCompound(a, b) {
   const roomGas = boil < 20, roomLiquid = !roomGas && melt < 20;
   const names = roomGas ? ['Solid ' + name.toLowerCase(), 'Liquid ' + name.toLowerCase(), name]
     : roomLiquid ? ['Frozen ' + name.toLowerCase(), name, name + ' vapor'] : [name, 'Molten ' + name.toLowerCase(), name + ' vapor'];
-  return { A, B, x, y, formula, plain, name, names, kind, act, heat, rate, dec, dX,
+  return { A, B, x, y, formula, plain, name, names, kind, dX,
     props: { sym: formula, melt, boil, dens: Math.round(dens * 100) / 100, k, cap, color, lift, soft, powder, names, gen: true, cpd: kind } };
 }
 
 // Every pair of elements gets its compound now, so the material tables below cover them all.
 export const NE0 = MATS.length;                 // elements and the hand-made materials come first
 export const PAIR_PRODUCT = new Uint16Array(NE0 * NE0), PAIR_A = new Uint16Array(NE0 * NE0);
-export const PAIR_RATIO = new Float32Array(NE0 * NE0), PAIR_ACT = new Float32Array(NE0 * NE0), PAIR_HEAT = new Float32Array(NE0 * NE0), PAIR_RATE = new Float32Array(NE0 * NE0);
-export const CPD_INFO = {};                     // product id -> { A, B (ids), ratio: B per A, dec }
+export const PAIR_RATIO = new Float32Array(NE0 * NE0);
+export const CPD_INFO = {};                     // product id -> { A, B (ids), ratio: B per A }
 {
   const syms = MATS.filter(m => m.z && m.z <= 118).map(m => m.key);
   const madeBy = {};
@@ -164,9 +146,8 @@ export const CPD_INFO = {};                     // product id -> { A, B (ids), r
     for (const [u, v] of [[ia, ib], [ib, ia]]) {
       const k = u * NE0 + v;
       PAIR_PRODUCT[k] = pid; PAIR_A[k] = ia; PAIR_RATIO[k] = plan.y / plan.x;
-      PAIR_ACT[k] = plan.act; PAIR_HEAT[k] = plan.heat; PAIR_RATE[k] = plan.rate;
     }
-    if (!CPD_INFO[pid]) CPD_INFO[pid] = { A: ia, B: ib, ratio: plan.y / plan.x, heat: plan.heat, dec: KNOWN_CPD[plan.plain] ? 1e9 : plan.dec };
+    if (!CPD_INFO[pid]) CPD_INFO[pid] = { A: ia, B: ib, ratio: plan.y / plan.x };
   }
 }
 

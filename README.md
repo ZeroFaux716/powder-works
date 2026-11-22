@@ -31,8 +31,9 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
   - `flow.js` (pressure, gas and heat flow), `parts.js` (rigid parts), `joints.js`
   - `world.js` (one step, snapshots), `editing.js` (painting and filling), `scenes.js`
   - `energy.js`: chemistry driven by energy. Whether elements combine (only where that lowers the Gibbs
-    energy), how hot it gets (from the enthalpy), and when compounds fall apart, all from `thermo.gen.js`;
-    how fast they get going is Arrhenius' law with a calibrated barrier
+    energy), how hot it gets (from the enthalpy), when compounds fall apart, and which element wins when a
+    compound meets another (per shared atom, the lower Gibbs energy, as on an Ellingham diagram: smelting,
+    thermite, displacement), all from `thermo.gen.js`; how fast is Arrhenius' law with a calibrated barrier
   - `sleep.js`: chunk sleeping. The gas, heat and air passes skip 16x16 chunks where everything has settled;
     a scan each frame wakes any chunk where something changed, and its neighbours
   - `index.js`: re-exports everything, plus the `Sim` object the tests use
