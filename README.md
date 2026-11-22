@@ -44,6 +44,11 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
 - `tests/explore/`: the older scripts that print measurements rather than pass or fail, handy when tuning
   (`node tests/explore/test15.js` prints the engine's rpm, firings and fuel every 2 s)
 - `tools/`: generators for the element and chemistry data tables (from Periodic-Table-JSON)
+  - `gen_thermo.py`: energy data (enthalpy and Gibbs energy against temperature) for every chemical material,
+    into `src/sim/thermo.gen.js`, from NASA's thermodynamic tables (TM-4513, via Cantera's `data/` folder),
+    textbook values, and estimates fitted to the real values. `tools/thermo-report.md` says where each number
+    came from, how good the estimates are, and checks reactions against what really happens. To rebuild:
+    `node tools/dump_chem.mjs > tools/chem_materials.json && python3 tools/gen_thermo.py <cantera>/data`
 
 ## Running
 
