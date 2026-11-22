@@ -11,6 +11,7 @@ import { bodiesAt, removeBody } from './sim/parts.js';
 import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, removeJoint, setJointKind, setMotor, setSpring, snapPoint, springEnds, ungrab } from './sim/joints.js';
 import { restore, snapshot, step } from './sim/world.js';
 import { alloyName, massOf, massShare, meltWith, pct, solute } from './sim/alloys.js';
+import { isBrittle, partStrength } from './sim/strength.js';
 import { addBody, cellsRect, draft, finishPart, floodRegion, lineCells, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
 
@@ -298,6 +299,19 @@ function zigzag(ax, ay, bx, by, color, width) {
   octx.lineTo(bx * OS, by * OS);
   octx.lineWidth = width; octx.strokeStyle = color; octx.stroke();
 }
+// a joint's colour: its own, turning amber past half of what its pins can take and red near the limit
+const LOAD_AMBER = '#e8b04a', LOAD_RED = '#ef5b4f';
+function jointColor(rec, base) {
+  const f = rec.cap ? rec.load / rec.cap : 0;
+  return f > 0.85 ? LOAD_RED : f > 0.5 ? LOAD_AMBER : base;
+}
+function jointSub(rec) {
+  const what = rec.kind === 'spring' ? (rec.B ? 'Joins two parts' : 'Hangs a part from the background')
+    : rec.kind === 'slider' ? 'Part slides along a fixed track' : rec.B ? 'Joins two parts' : 'Pins a part to the background';
+  const l = loadText(rec);
+  return l ? what + ' · ' + l : what;
+}
+const loadText = rec => rec.cap ? 'load ' + Math.round(100 * rec.load / rec.cap) + '% of what its pins can take' : '';
 function drawOverlay() {
   octx.clearRect(0, 0, over.width, over.height);
   if (gridOn && view === 0) drawGrid();
@@ -306,7 +320,7 @@ function drawOverlay() {
     const chosen = sel && sel.rec === rec;
     if (rec.kind === 'spring') {
       const [a, b] = springEnds(rec);
-      zigzag(a.x / S, a.y / S, b.x / S, b.y / S, chosen ? SEL : JCOL.spring, chosen ? 2.5 : 1.8);
+      zigzag(a.x / S, a.y / S, b.x / S, b.y / S, chosen ? SEL : jointColor(rec, JCOL.spring), chosen ? 2.5 : 1.8);
       for (const p of [a, b]) { octx.beginPath(); octx.arc(p.x / S * OS, p.y / S * OS, 3, 0, Math.PI * 2); octx.fillStyle = chosen ? SEL : JCOL.spring; octx.fill(); }
       continue;
     }
@@ -318,13 +332,13 @@ function drawOverlay() {
       octx.lineTo((tx + ax.x * L) * OS, (ty + ax.y * L) * OS);
       octx.setLineDash([6, 4]);
       octx.lineWidth = 2;
-      octx.strokeStyle = chosen ? SEL : JCOL.slider;
+      octx.strokeStyle = chosen ? SEL : jointColor(rec, JCOL.slider);
       octx.stroke();
       octx.setLineDash([]);
       octx.fillStyle = '#0b0f14';
       octx.fillRect(x * OS - 5, y * OS - 5, 10, 10);
       octx.lineWidth = 2.5;
-      octx.strokeStyle = chosen ? SEL : JCOL.slider;
+      octx.strokeStyle = chosen ? SEL : jointColor(rec, JCOL.slider);
       octx.strokeRect(x * OS - 5, y * OS - 5, 10, 10);
       continue;
     }
@@ -332,7 +346,7 @@ function drawOverlay() {
     octx.arc(x * OS, y * OS, 5, 0, Math.PI * 2);
     octx.fillStyle = '#0b0f14';
     octx.fill();
-    ring(x, y, 5, chosen ? SEL : JCOL[rec.kind], 2.5);
+    ring(x, y, 5, chosen ? SEL : jointColor(rec, JCOL[rec.kind]), 2.5);
     if (chosen) ring(x, y, 9, SEL, 1.5);
     if (rec.kind === 'motor') {
       const ang = rec.A.b.getAngle();
@@ -542,7 +556,7 @@ function showInspector() {
     const n = sel.rb.occ.reduce((a, v) => a + v, 0);
     const joints = jrecs.filter(r => r.A === sel.rb || r.B === sel.rb).length;
     insTitle.textContent = partName(sel.rb) + ' part';
-    insSub.textContent = 'Melts at ' + Math.round(meltWith(sel.rb.mat, sel.rb.sx)) + ' °C · ' + n + ' cells' + (joints ? ' · ' + joints + (joints === 1 ? ' joint' : ' joints') : '');
+    insSub.textContent = Math.round(partStrength(sel.rb)) + ' MPa, ' + (isBrittle(sel.rb.mat, sel.rb.sol, sel.rb.sx) ? 'brittle' : 'tough') + ' · melts at ' + Math.round(meltWith(sel.rb.mat, sel.rb.sx)) + ' °C · ' + n + ' cells' + (joints ? ' · ' + joints + (joints === 1 ? ' joint' : ' joints') : '');
     insKind.hidden = true; insMotor.hidden = true; insRotate.hidden = false;
     document.getElementById('insDelete').textContent = 'Delete part';
     return;
@@ -550,7 +564,7 @@ function showInspector() {
   const rec = sel.rec;
   if (rec.kind === 'spring') {
     insTitle.textContent = 'Spring';
-    insSub.textContent = rec.B ? 'Joins two parts' : 'Hangs a part from the background';
+    insSub.textContent = jointSub(rec);
     insRotate.hidden = true; insKind.hidden = true; insMotor.hidden = true; insSpring.hidden = false;
     document.getElementById('insHz').value = +rec.hz.toFixed(2);
     document.getElementById('insDamp').value = +rec.damp.toFixed(2);
@@ -559,7 +573,7 @@ function showInspector() {
     return;
   }
   insTitle.textContent = rec.kind === 'slider' ? 'Slider' : rec.kind === 'motor' ? 'Motor' : 'Hinge';
-  insSub.textContent = rec.kind === 'slider' ? 'Part slides along a fixed track' : rec.B ? 'Joins two parts' : 'Pins a part to the background';
+  insSub.textContent = jointSub(rec);
   insRotate.hidden = true;
   insKind.hidden = rec.kind === 'slider';
   insKind.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.kind === rec.kind ? 'true' : 'false'));
@@ -1224,6 +1238,14 @@ function frame() {
   if (sel && ((sel.rb && !bodies.has(sel.rb.id)) || (sel.rec && !jrecs.includes(sel.rec)) || (sel.dev && fan[sel.cells[0]] !== sel.dev))) select(null);
   snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapAt(hoverFX, hoverFY) : null;
   render();
+  if (sel && sel.rec && frameNo % 10 === 0) insSub.textContent = jointSub(sel.rec);
+  if (G.broke) {
+    const b = G.broke, name = b.sx && b.sol ? alloyName(b.mat, b.sol, massOf(b.mat, b.sol, b.sx)) : MATS[b.mat].name;
+    setHint(b.kind === 'impact' ? 'A ' + name.toLowerCase() + ' part cracked on impact: it is brittle. A tough metal takes knocks.'
+      : 'A ' + b.kind + ' gave way: the ' + name.toLowerCase() + ' around its pin ' + (b.brittle ? 'cracked' : 'tore') +
+      ' once the load passed what it could take. Use a stronger metal, more part round the pin, or less load.');
+    G.broke = null;
+  }
   const news = G.madeNews;
   if (news !== null) {
     G.madeNews = null;

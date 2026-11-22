@@ -12,6 +12,7 @@ import { FX, FY, P, advectAir, diffuseHeat, diffusePressure, liquidPressure, tem
 import { physicsStep, rebuildGround, spawn } from './parts.js';
 import { scanChunks, wakeAll } from './sleep.js';
 import { meltOf } from './alloys.js';
+import { checkJoints } from './strength.js';
 import { buildJoint, jrecs } from './joints.js';
 
 export let tick = 0, cur = 1;
@@ -121,6 +122,7 @@ export function step() {
   advectAir();
   diffuseHeat();
   physicsStep();
+  checkJoints();
 }
 
 export function clearAll() {

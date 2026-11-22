@@ -21,6 +21,9 @@ hinges, motors, sliders and springs.
 - Alloys: molten metals mix and dissolve carbon and other elements, melt lower for it, and oxygen blown through
   molten cast iron burns the carbon out first, making steel. Solid alloys you make (steel, cast iron, bronze,
   "nickel with 12% copper") appear in Made so far, and paint and build parts in that alloy
+- Part strength from real hardness data: overloaded joints tear out (or crack, in brittle metal), hot metal is
+  weaker, steel is stronger than iron, and brittle parts crack when they hit something. Joints turn amber and
+  red as they near their limit
 
 Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
 
@@ -40,6 +43,8 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
   - `alloys.js`: a cell can hold one dissolved material. Molten metals blend and take in touching elements
     (carbon in iron up to a fifth of the atoms); what is dissolved lowers the melting point (ideal solution,
     Richards' rule) and heat conduction
+  - `strength.js`: part strength (`strength.gen.js`, harder for alloys, softer when hot). Joints give way when
+    the force on them passes what the metal round their pins can take; brittle parts crack on impact
   - `sleep.js`: chunk sleeping. The gas, heat and air passes skip 16x16 chunks where everything has settled;
     a scan each frame wakes any chunk where something changed, and its neighbours
   - `index.js`: re-exports everything, plus the `Sim` object the tests use

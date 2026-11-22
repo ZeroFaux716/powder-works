@@ -33,6 +33,7 @@ export * from './editing.js';
 export * from './scenes.js';
 export * from './sleep.js';
 export * from './alloys.js';
+export * from './strength.js';
 
 export const Sim = {
   W, H, P0, S, MATS, ID, NONE, STATIC, POWDER, LIQUID, GAS, PART, type, st, life, bid, bodies,
