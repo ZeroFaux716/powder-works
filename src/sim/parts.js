@@ -3,7 +3,7 @@ import * as planck from 'planck';
 import { AMBIENT, DRAFT, DT, GAMMA, GAS, GRAVITY, H, LIQUID, N, NONE, P0, PART, PFORCE, S, SKIN, SOL, STATIC, W, WIND } from './constants.js';
 import { MATS } from './materials.js';
 import { DENS, MELT } from './tables.js';
-import { G, LP, aux, bid, bodies, lat, life, ox, st, stamp, type, world } from './grid.js';
+import { G, LP, aux, bid, bodies, lat, life, ox, pairKey, passPairs, st, stamp, type, world } from './grid.js';
 import { NB, fk, phase } from './reactions.js';
 import { FX, FY, P, temp } from './flow.js';
 import { buildJoint, dropJoint, jrecs, removeJoint, springEnds } from './joints.js';
@@ -42,17 +42,31 @@ export function addFixtures(b, occ, w, h, ox, oy, matId) {
   }
 }
 
+// Parts drawn over other parts pass through them (passPairs, in grid.js, which also holds the collision filter).
+export function letPass(a, b) { if (a !== b) passPairs.add(pairKey(a, b)); }
+export function forgetPasses(id) { for (const k of passPairs) if (Math.floor(k / 65536) === id || k % 65536 === id) passPairs.delete(k); }
+// a piece broken off a part keeps passing through whatever the part passed through
+function inheritPasses(from, to) { for (const k of [...passPairs]) { const a = Math.floor(k / 65536), b = k % 65536; if (a === from) letPass(to, b); else if (b === from) letPass(a, to); } }
+// whether a part covers grid square (x, y), wherever it has moved or turned to
+export function partCovers(rb, x, y) {
+  const pos = rb.b.getPosition(), a = rb.b.getAngle(), c = Math.cos(a), s = Math.sin(a);
+  const qx = x + 0.5 - pos.x / S, qy = y + 0.5 - pos.y / S;
+  const ix = Math.floor(c * qx + s * qy - rb.ox), iy = Math.floor(-s * qx + c * qy - rb.oy);
+  return ix >= 0 && iy >= 0 && ix < rb.w && iy < rb.h && rb.occ[iy * rb.w + ix] === 1;
+}
+
 export function spawn(occ, temps, w, h, ox, oy, R, x, y, angle, matId, id, lats) {
   const b = world.createBody({ type: 'dynamic', position: planck.Vec2(x, y), angle, angularDamping: 0.01 });
   addFixtures(b, occ, w, h, ox, oy, matId);
   if (!id) { id = G.nextId++; if (G.nextId > 65000) G.nextId = 1; }
+  b.setUserData(id);
   const rb = { id, b, occ, temps, lats: lats || new Float32Array(w * h), w, h, ox, oy, R, mat: matId, foot: [], footK: [], old: [], lastPos: planck.Vec2(x, y), lastAngle: angle };
   bodies.set(id, rb);
   return rb;
 }
 
-export function makeBody(cells, matId) {
-  const list = cells.filter(i => st[i] !== STATIC && st[i] !== PART);
+export function makeBody(cells, matId, over) {
+  const list = cells.filter(i => st[i] !== STATIC && (over || st[i] !== PART));
   if (!list.length) return null;
   let minX = W, minY = H, maxX = 0, maxY = 0, sx = 0, sy = 0;
   for (const i of list) {
@@ -309,6 +323,7 @@ export function refit(rb) {
       const nb = spawn(o, rb.temps.slice(), w, h, rb.ox, rb.oy, rb.R, p.x, p.y, rb.b.getAngle(), rb.mat, 0, rb.lats.slice());
       nb.b.setLinearVelocity(planck.Vec2(v.x, v.y));
       nb.b.setAngularVelocity(rb.b.getAngularVelocity());
+      inheritPasses(rb.id, nb.id);
       pieces.set(L, nb);
     }
   }
@@ -363,6 +378,7 @@ export function removeBody(id) {
   liftBody(rb);
   world.destroyBody(rb.b);
   bodies.delete(id);
+  forgetPasses(id);
 }
 
 export function physicsStep() {

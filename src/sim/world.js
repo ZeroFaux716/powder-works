@@ -3,7 +3,7 @@ import * as planck from 'planck';
 import { AMBIENT, DRAFT, GAS, H, LIQUID, NONE, P0, PART, POWDER, STATIC, W } from './constants.js';
 import { MATS } from './materials.js';
 import { CHEMV, CPDI, IGN, MELT, PARTRX, RAD, RX } from './tables.js';
-import { G, LP, Pref, aux, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, lit, ox, st, stamp, type, world } from './grid.js';
+import { G, LP, Pref, aux, passPairs, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, lit, ox, st, stamp, type, world } from './grid.js';
 import { burn, chemCompound, chemReact, cpdReact, detach, need, phase, react, smolder, wetReact } from './reactions.js';
 import { electric } from './electrics.js';
 import { nDX, nDY, nFast, nLife, nX, nY, radiate, stepNeutrons } from './neutrons.js';
@@ -29,7 +29,8 @@ export function snapshot() {
       kind: r.kind, A: r.A.id, B: r.B ? r.B.id : 0, lx: r.localA.x, ly: r.localA.y,
       axis: r.axis ? [r.axis.x, r.axis.y] : null, spin: r.spin, strength: r.strength,
       hz: r.hz, damp: r.damp, len: r.len, lb: r.localB ? [r.localB.x, r.localB.y] : null, wb: r.worldB ? [r.worldB.x, r.worldB.y] : null
-    }))
+    })),
+    pass: [...passPairs]
   };
 }
 
@@ -57,6 +58,7 @@ export function restore(snap) {
     } else buildJoint(rec, A.b.getWorldPoint(planck.Vec2(jd.lx, jd.ly)));
     jrecs.push(rec);
   }
+  for (const k of snap.pass || []) passPairs.add(k);   // (saves from before 0.3 have none)
   G.groundDirty = true;
   rebuildGround();
 }
@@ -120,6 +122,7 @@ export function clearAll() {
   G.grabBase = null;
   bodies.clear();
   jrecs.length = 0;
+  passPairs.clear();
   G.nCount = 0;
   LP.fill(0); G.lpCells = []; lit.fill(0);
   fan.fill(0); dset.fill(0); gate.fill(1); ddir.fill(0); FX.fill(0); FY.fill(0);

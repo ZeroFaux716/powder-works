@@ -3,14 +3,14 @@ import * as planck from 'planck';
 import { AMBIENT, DRAFT, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, POWDER, S, SOL, STATIC, W } from './sim/constants.js';
 import { ID, MATS } from './sim/materials.js';
 import { FIRE, SMOKE, stateAt } from './sim/tables.js';
-import { CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, LP, PLUG, PUMP, SENSE_C, SENSE_P, SENSE_T, SWITCH, VALVE, WIRE, bid, bodies, ddir, dset, fan, gate, life, lit, open, ox, st, type } from './sim/grid.js';
+import { passPairs, CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, LP, PLUG, PUMP, SENSE_C, SENSE_P, SENSE_T, SWITCH, VALVE, WIRE, bid, bodies, ddir, dset, fan, gate, life, lit, open, ox, st, type } from './sim/grid.js';
 import { made } from './sim/reactions.js';
 import { nFast, nX, nY } from './sim/neutrons.js';
 import { FX, FY, P, temp } from './sim/flow.js';
 import { bodiesAt, removeBody } from './sim/parts.js';
 import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, removeJoint, setJointKind, setMotor, setSpring, snapPoint, springEnds, ungrab } from './sim/joints.js';
 import { restore, snapshot, step } from './sim/world.js';
-import { addBody, cellsRect, finishPart, paint } from './sim/editing.js';
+import { addBody, cellsRect, draft, finishPart, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
 
 // ---------- rendering and input ----------
@@ -135,6 +135,12 @@ function render() {
           }
         }
       }
+      const dm = draft[i];
+      if (dm) {
+        // a part being drawn shows on top of whatever is there, lightened
+        const c = MATS[dm].color;
+        r = c[0] + (255 - c[0]) * 0.3; g = c[1] + (255 - c[1]) * 0.3; b = c[2] + (255 - c[2]) * 0.3;
+      }
       const fd = fan[i];
       if (fd >= CONTACT) {
         // electrics: dull when idle, bright while their circuit is live
@@ -197,6 +203,7 @@ function render() {
     }
     px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
   }
+  if (view === 0 && passPairs.size) showHiddenParts(selId);
   // neutrons in flight: fast ones white, slowed ones green
   for (let n = 0; n < G.nCount; n++) {
     const o = ((nY[n] | 0) * W + (nX[n] | 0)) * 4;
@@ -205,6 +212,31 @@ function render() {
   }
   ctx.putImageData(img, 0, 0);
   drawOverlay();
+}
+
+// Where parts that pass through each other overlap, only one owns each grid square. Show the other one
+// through it, faintly, so a rod crossing a flywheel stays visible all the way along.
+function showHiddenParts(selId) {
+  const ids = new Set();
+  for (const k of passPairs) { ids.add(Math.floor(k / 65536)); ids.add(k % 65536); }
+  for (const id of ids) {
+    const rb = bodies.get(id);
+    if (!rb) continue;
+    const pos = rb.b.getPosition(), a = rb.b.getAngle(), c = Math.cos(a), s = Math.sin(a);
+    const px0 = pos.x / S, py0 = pos.y / S, col = MATS[rb.mat].color;
+    // lightened, so a part over another of the same material still shows
+    const [cr, cg, cb] = id === selId ? [242, 163, 58] : col.map(v => v + (255 - v) * 0.45), k = id === selId ? 0.6 : 0.5;
+    for (let iy = 0; iy < rb.h; iy++) for (let ix = 0; ix < rb.w; ix++) {
+      if (!rb.occ[iy * rb.w + ix]) continue;
+      const lx = ix + rb.ox + 0.5, ly = iy + rb.oy + 0.5;
+      const X = Math.floor(px0 + c * lx - s * ly), Y = Math.floor(py0 + s * lx + c * ly);
+      if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+      const i = Y * W + X;
+      if (st[i] !== PART || bid[i] === id) continue;
+      const o = i * 4;
+      px[o] += (cr - px[o]) * k; px[o + 1] += (cg - px[o + 1]) * k; px[o + 2] += (cb - px[o + 2]) * k;
+    }
+  }
 }
 
 function ring(x, y, rad, color, width, dash) {
@@ -861,12 +893,12 @@ function release() {
     setHint('Slider added. The part can now only move along the dashed track.');
   } else if (drag && drag.mode === 'grab') ungrab(drag.j);
   else if (tool === 'block') {
-    const rb = addBody(cellsRect(dragX, dragY, lastX, lastY), partMat());
+    const rb = makePart(cellsRect(dragX, dragY, lastX, lastY), partMat());
     if (rb) select({ rb });
-    setHint(rb ? MATS[rb.mat].name + ' block placed. Pin it with Hinge, or let it fall.' : 'A block needs clear space. Drag it where nothing solid is in the way.');
+    setHint(rb ? MATS[rb.mat].name + ' block placed' + passNote() + '. Pin it with Hinge, or let it fall.' : 'A block needs clear space. Drag it where no wall is in the way.');
   } else if (tool === 'part') {
     const n = finishPart();
-    if (n) setHint(n === 1 ? 'Part made. Join it to others with Hinge.' : n + ' parts made. Join them with Hinge.');
+    if (n) setHint((n === 1 ? 'Part made' : n + ' parts made') + passNote() + '. Join parts with Hinge.');
   }
   drag = null;
 }
@@ -880,14 +912,15 @@ canvas.addEventListener('wheel', ev => {
 }, { passive: false });
 
 // ---------- tools, play and rewind ----------
+const passNote = () => passedLast ? ' (it passes through the ' + (passedLast === 1 ? 'part' : passedLast + ' parts') + ' it was drawn over)' : '';
 function toolHint(name) {
   if (name === 'brush') return 'Painting ' + label(curMat, stateAt(MATS[curMat], AMBIENT)).toLowerCase() + '. Press T for the full table of materials.';
   if (name === 'part' || name === 'block') {
     const made = MATS[partMat()].name.toLowerCase();
     const why = partMat() === curMat ? '' : ' (' + MATS[curMat].name + ' is not a solid block, so parts use iron)';
     return name === 'part'
-      ? 'Draw a shape in ' + made + why + '. Each connected piece becomes a solid part when you let go.'
-      : 'Drag a rectangle to make a solid ' + made + ' part' + why + '.';
+      ? 'Draw a shape in ' + made + why + '. Each connected piece becomes a solid part when you let go. Draw over other parts and it passes through them, so a rod can cross a flywheel.'
+      : 'Drag a rectangle to make a solid ' + made + ' part' + why + '. Over other parts, it passes through them.';
   }
   return TOOL_HINTS[name];
 }

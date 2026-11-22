@@ -9,6 +9,8 @@ hinges, motors, sliders and springs.
 - Gas pressure, flow with momentum, a gas law, heat, latent heat, liquids under pressure, buoyancy, radioactivity
 - Boiling points that rise with pressure, so a sealed boiler builds steam and settles at a steady pressure
 - Rigid parts built from cells, which melt, burn, rust and break apart
+- Parts can be drawn over other parts and pass through the ones they cover, so you can build a crank, a
+  piston and a connecting rod yourself
 - Circuits: contacts, wire, switches, sensors, inverters, spark plugs, injectors, valves, heaters, pumps, electrodes
 - Scenes: a two-stroke engine, an oil refinery, a chemistry bench, a reactor and more
 - Undo/redo, save/open, five views (materials, pressure, heat, flow, burnt gas)
@@ -31,7 +33,7 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
 - `tests/checks/`: self-checking tests. `npm test` runs them all (under 4 minutes) and reports pass or fail
   for each: every material simulates cleanly, gases layer, edges, springs and Rewind, the engine and crank,
   compounds and acids, thermite, the refinery's jars, the components scene, hydraulics, the fan wheel, the
-  diesel hammer, critical mass, and steam (sealed boilers, boiling under pressure, the steam piston). Math.random is seeded, so a run gives the same numbers every time.
+  diesel hammer, critical mass, building parts over parts, and steam (sealed boilers, boiling under pressure, the steam piston). Math.random is seeded, so a run gives the same numbers every time.
   `node --test tests/checks/engine.test.js` runs one file.
 - `tests/explore/`: the older scripts that print measurements rather than pass or fail, handy when tuning
   (`node tests/explore/test15.js` prints the engine's rpm, firings and fuel every 2 s)

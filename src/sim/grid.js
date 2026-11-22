@@ -62,6 +62,16 @@ export const world = planck.World({ gravity: planck.Vec2(0, GRAVITY) });
 G.ground = world.createBody();
 export const bodies = new Map();
 
+// Parts drawn over other parts pass through the parts they were drawn over, as if on another layer, so a
+// connecting rod can cross a flywheel or lie over a piston. Each pair is one number, smaller part id first.
+export const passPairs = new Set();
+export const pairKey = (a, b) => a < b ? a * 65536 + b : b * 65536 + a;
+world.on('pre-solve', contact => {
+  if (!passPairs.size) return;
+  const a = contact.getFixtureA().getBody().getUserData(), b = contact.getFixtureB().getBody().getUserData();
+  if (a && b && passPairs.has(pairKey(a, b))) contact.setEnabled(false);
+});
+
 export function swap(i, j) {
   const t = type[i]; type[i] = type[j]; type[j] = t;
   const s = st[i]; st[i] = st[j]; st[j] = s;

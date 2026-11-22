@@ -1,12 +1,12 @@
 // Painting and filling: what the tools do to the grid.
-import { AMBIENT, DRAFT, GAS, H, NONE, P0, PART, SOL, STATIC, W } from './constants.js';
+import { AMBIENT, DRAFT, GAS, H, N, NONE, P0, PART, SOL, STATIC, W } from './constants.js';
 import { ID, MATS } from './materials.js';
 import { FIRE, stateAt } from './tables.js';
 import { CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, PLUG, PUMP, Pref, SENSE_T, SWITCH, VALVE, WIRE, aux, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, st, type, world } from './grid.js';
 import { burn, made } from './reactions.js';
 import { emit } from './neutrons.js';
 import { P, temp } from './flow.js';
-import { makeBody, placeBody, removeBody } from './parts.js';
+import { letPass, makeBody, partCovers, placeBody, removeBody } from './parts.js';
 
 // Fill a rectangle with a material in the state it has at room temperature. key null clears it.
 export const TRAYS = [[59, 96, 100], [75, 110, 180], [87, 124, 240]];   // refinery draw-offs: tray row, jar centre, temperature   // refinery draw-offs: tray row and jar centre, top to bottom
@@ -51,25 +51,38 @@ export function cellsLine(x0, y0, x1, y1, half) {
   }
   return [...set];
 }
-export function addBody(cells, matId) {
+// over: the part may lie over other parts (it passes through them; see passPairs)
+export function addBody(cells, matId, over) {
   if (matId === undefined) matId = ID.Fe;
-  const rb = makeBody(cells, matId);
+  const rb = makeBody(cells, matId, over);
   if (rb && !placeBody(rb)) {
-    // nowhere to push what is underneath: keep only the open cells
+    // nowhere to push what is underneath: keep only the open cells (and, if allowed, the ones over parts)
     world.destroyBody(rb.b); bodies.delete(rb.id);
-    return addBody(cells.filter(i => st[i] === NONE || st[i] === GAS), matId);
+    return addBody(cells.filter(i => st[i] === NONE || st[i] === GAS || (over && st[i] === PART)), matId, over);
   }
   return rb;
 }
 
-// Cells drawn with the Part tool become one part per connected piece when the stroke ends.
+// Cells drawn with the Part tool become one part per connected piece when the stroke ends. The stroke is
+// kept on its own layer (draft) rather than in the grid, so it can be drawn over other parts and over loose
+// material without disturbing them. A new part passes through every part it was drawn over.
+export const draft = new Uint16Array(N);
 export let strokeCells = [];
+export let passedLast = 0;   // how many parts the last part made was drawn over (for the hint)
+// A part from the Part or Block tool: it may lie over other parts, and passes through the ones it covers.
+export function makePart(cells, matId) {
+  const under = [];   // found by shape, so parts hidden under other parts count too
+  for (const rb of bodies.values()) if (cells.some(i => partCovers(rb, i % W, (i / W) | 0))) under.push(rb.id);
+  const rb = addBody(cells, matId, true);
+  if (rb) { for (const id of under) letPass(rb.id, id); passedLast = under.length; }
+  return rb;
+}
 export function finishPart() {
   const seen = new Set();
-  let made = 0;
+  let made = 0, passed = 0;
   for (const start of strokeCells) {
-    if (seen.has(start) || st[start] !== DRAFT) continue;
-    const matId = type[start];
+    if (seen.has(start) || !draft[start]) continue;
+    const matId = draft[start];
     const comp = [start], stack = [start];
     seen.add(start);
     while (stack.length) {
@@ -77,13 +90,15 @@ export function finishPart() {
       for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
         if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
         const j = ny * W + nx;
-        if (st[j] !== DRAFT || type[j] !== matId || seen.has(j)) continue;
+        if (draft[j] !== matId || seen.has(j)) continue;
         seen.add(j); comp.push(j); stack.push(j);
       }
     }
-    for (const i of comp) { type[i] = 0; st[i] = NONE; P[i] = 0; }
-    if (addBody(comp, matId)) made++;
+    for (const i of comp) draft[i] = 0;
+    if (makePart(comp, matId)) { made++; passed += passedLast; }
   }
+  passedLast = passed;
+  for (const i of strokeCells) draft[i] = 0;
   strokeCells = [];
   return made;
 }
@@ -136,7 +151,7 @@ export function paint(cx, cy, tool, r, matId) {
     } else if (m && m.special === 'neutron') {
       if (Math.random() < 0.3) emit(x, y, true);
     } else if (tool === 'part') {
-      if (s === NONE || s === GAS) { type[i] = m.id; st[i] = DRAFT; life[i] = 0; aux[i] = 0; temp[i] = AMBIENT; strokeCells.push(i); }
+      if (s !== STATIC && !draft[i]) { draft[i] = m.id; strokeCells.push(i); }
     } else if (ms === STATIC) {
       if (!SOL[s]) { type[i] = m.id; st[i] = STATIC; life[i] = 0; aux[i] = 0; lat[i] = 0; temp[i] = AMBIENT; P[i] = P0; G.groundDirty = true; }
     } else if (s === NONE && Math.random() < (ms === GAS ? 0.6 : 0.8)) {
