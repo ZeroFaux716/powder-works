@@ -733,6 +733,25 @@ function cpdButton(m) {
 // compounds that have formed in this session, newest last
 const madeEl = document.getElementById('made'), madeHead = document.getElementById('madeHead');
 const madeShown = new Set();
+// The compounds discovered so far are kept by the browser between visits (by name, so they survive new
+// versions of the material list), and travel in save files.
+const MADE_KEY = 'powder-works-made';
+function rememberMade() {
+  try { localStorage.setItem(MADE_KEY, JSON.stringify([...made].filter(id => MATS[id] && MATS[id].gen).map(id => MATS[id].key))); } catch (e) {}
+}
+function learnMade(keys) {
+  let n = 0;
+  for (const k of keys || []) { const id = ID[k]; if (id !== undefined && MATS[id].gen && !made.has(id)) { made.add(id); n++; } }
+  return n;
+}
+// any compound lying on the bench or making up a part counts as discovered
+function learnFromBench() {
+  let n = 0;
+  for (let i = 0; i < N; i++) { const t = type[i]; if (st[i] && MATS[t].gen && !made.has(t)) { made.add(t); n++; } }
+  for (const rb of bodies.values()) if (MATS[rb.mat].gen && !made.has(rb.mat)) { made.add(rb.mat); n++; }
+  return n;
+}
+try { learnMade(JSON.parse(localStorage.getItem(MADE_KEY) || '[]')); } catch (e) {}
 function showMade() {
   for (const id of made) {
     if (madeShown.has(id) || !MATS[id].gen) continue;
@@ -740,6 +759,7 @@ function showMade() {
     madeEl.appendChild(cpdButton(MATS[id]));
     madeHead.hidden = false;
   }
+  rememberMade();
 }
 function palButton(m, text) {
   const b = document.createElement('button');
@@ -1148,6 +1168,7 @@ function frame() {
 }
 setMat(ID.sand);
 load('engine');
+showMade();   // compounds discovered on earlier visits
 requestAnimationFrame(frame);
 
 // ---------- undo / redo ----------
@@ -1224,7 +1245,7 @@ async function gzip(text, back) {
 // The file is a small JSON wrapper around the compressed bench, so it travels as an ordinary .json file.
 async function saveBench() {
   try {
-    const data = { app: 'powder-works', version: SAVE_VERSION, game: APP_VERSION, W, H, scene: preset, mats: MATS.map(m => m.key), snap: encodeValue(snapshot()) };
+    const data = { app: 'powder-works', version: SAVE_VERSION, game: APP_VERSION, W, H, scene: preset, mats: MATS.map(m => m.key), made: [...made].filter(id => MATS[id].gen).map(id => MATS[id].key), snap: encodeValue(snapshot()) };
     const packed = new Uint8Array(await (await gzip(JSON.stringify(data))).arrayBuffer());
     let bin = '';
     for (let k = 0; k < packed.length; k += 0x8000) bin += String.fromCharCode.apply(null, packed.subarray(k, k + 0x8000));
@@ -1272,7 +1293,9 @@ async function openBench(file) {
     restore(snap);
     saved = null; rewindBtn.disabled = true; setPlaying(false);
     if (data.scene && HINTS[data.scene] !== undefined) { preset = data.scene; presetEl.value = data.scene; }
-    setHint('Opened ' + file.name + '.');
+    const learnt = learnMade(data.made) + learnFromBench();
+    showMade();
+    setHint('Opened ' + file.name + '.' + (learnt ? ' ' + learnt + (learnt === 1 ? ' compound' : ' compounds') + ' from it added to Made so far.' : ''));
   } catch (err) {
     setHint('Could not open that file: ' + err.message);
   }

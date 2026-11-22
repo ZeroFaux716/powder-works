@@ -17,6 +17,7 @@ hinges, motors, sliders and springs.
 - Powder Toy's drawing keys: Shift-drag a line, Ctrl-drag (Cmd on a Mac) a filled box, Alt snaps them to 45° and
   squares, Ctrl+Shift-click fills an area. They work with every painting tool, including Part
 - An adjustable grid (2 to 16 cells) with Snap, which locks lines, boxes, Block corners, joints and moved parts to it
+- Compounds you discover stay in Made so far between visits and travel in save files
 
 Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
 
@@ -29,6 +30,8 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
   - `reactions.js` (heat, burning, chemistry, distilling), `electrics.js`, `neutrons.js`, `cells.js` (each cell's own update)
   - `flow.js` (pressure, gas and heat flow), `parts.js` (rigid parts), `joints.js`
   - `world.js` (one step, snapshots), `editing.js` (painting and filling), `scenes.js`
+  - `sleep.js`: chunk sleeping. The gas, heat and air passes skip 16x16 chunks where everything has settled;
+    a scan each frame wakes any chunk where something changed, and its neighbours
   - `index.js`: re-exports everything, plus the `Sim` object the tests use
 - `src/ui.js`: the page's behaviour; `src/style.css`: its look
 - `src/main.js` and `vite.config.js`: the entry point. For now the simulation and the page share one scope
@@ -36,7 +39,7 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
 - `tests/checks/`: self-checking tests. `npm test` runs them all (under 4 minutes) and reports pass or fail
   for each: every material simulates cleanly, gases layer, edges, springs and Rewind, the engine and crank,
   compounds and acids, thermite, the refinery's jars, the components scene, hydraulics, the fan wheel, the
-  diesel hammer, critical mass, building parts over parts, and steam (sealed boilers, boiling under pressure, the steam piston). Math.random is seeded, so a run gives the same numbers every time.
+  diesel hammer, critical mass, building parts over parts, steam, and chunk sleeping (sealed boilers, boiling under pressure, the steam piston). Math.random is seeded, so a run gives the same numbers every time.
   `node --test tests/checks/engine.test.js` runs one file.
 - `tests/explore/`: the older scripts that print measurements rather than pass or fail, handy when tuning
   (`node tests/explore/test15.js` prints the engine's rpm, firings and fuel every 2 s)

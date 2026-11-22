@@ -4,6 +4,7 @@ import { CAPS, CONDG, CONDS, FIRE } from './tables.js';
 import { G, HDX, HDY, LP, Pref, aux, cnd, cpBuf, cpc, dpBuf, fan, gate, headFaces, kfBuf, lat, life, open, ox, pcap, smooth, st, stamp, stocked, type } from './grid.js';
 import { NB } from './reactions.js';
 import { cur, tick } from './world.js';
+import { CSHIFT, CW, awake } from './sleep.js';
 
 export let temp = new Float32Array(N).fill(AMBIENT);
 export let temp2 = new Float32Array(N);
@@ -16,7 +17,14 @@ export let GX = new Float32Array(N), GY = new Float32Array(N);
 // Implicit diffusion along one run of open cells. Stable for any KFLOW, so pressure
 // can cross a whole chamber in one frame while still only passing through real openings.
 export const poBuf = new Float64Array(Math.max(W, H)), oxBuf = new Float64Array(Math.max(W, H));
-export function solveRun(start, stride, n, x, y, sx, sy, F, HD) {
+// hasL / hasR: the cell before the run's first cell / after its last is open but asleep, so it is held at its
+// pressure: flow still crosses that face, but the sleeping cell's pressure does not change this frame.
+const kfAt = (i, j) => (st[i] === LIQUID || st[j] === LIQUID ? KLIQ : KFLOW) * (gate[i] < gate[j] ? gate[i] : gate[j]);
+const onBorder = (cx, cy) => cx === 0 || cx === W - 1 || cy === 0 || cy === H - 1;
+export function solveRun(start, stride, n, x, y, sx, sy, F, HD, hasL, hasR) {
+  const last = start + (n - 1) * stride;
+  const kfL = hasL && !onBorder(x, y) ? kfAt(start - stride, start) : 0;
+  const kfR = hasR && !onBorder(x + sx * (n - 1), y + sy * (n - 1)) ? kfAt(last, last + stride) : 0;
   for (let k = 0; k < n; k++) { const idx = start + k * stride; oxBuf[k] = ox[idx]; poBuf[k] = P[idx] * pcap[idx]; }
   // kf[k] is how easily flow passes between cell k and cell k + 1 of the run
   for (let k = 0; k < n - 1; k++) {
@@ -36,6 +44,8 @@ export function solveRun(start, stride, n, x, y, sx, sy, F, HD) {
       // a fan across a face acts like an extra pressure difference there
       if (k < n - 1) d -= kfBuf[k] * HD[idx];
       if (k > 0) d += kfBuf[k - 1] * HD[idx - stride];
+      if (k === 0 && kfL) { b += kfL; d += F[idx - stride] + kfL * (P[idx - stride] + HD[idx - stride]); }
+      if (k === n - 1 && kfR) { b += kfR; d += kfR * (P[idx + stride] - HD[idx]); }
     }
     if (k === 0) { cpBuf[0] = c / b; dpBuf[0] = d / b; }
     else { const m = b - a * cpBuf[k - 1]; cpBuf[k] = c / m; dpBuf[k] = (d - a * dpBuf[k - 1]) / m; }
@@ -48,6 +58,8 @@ export function solveRun(start, stride, n, x, y, sx, sy, F, HD) {
     v = nv;
     P[start + k * stride] = v;
   }
+  if (kfL) F[start - stride] += kfL * (P[start - stride] - P[start] + HD[start - stride]);
+  if (kfR) F[last] += kfR * (P[last] - P[last + stride] + HD[last]);
   // Fresh and burnt gas travel with the flow. Each cell ends up as a mix of what it held and what flowed in
   // (worked out implicitly, so fast flow through small cells cannot overshoot): one pass along the run
   // settles everything carried rightwards, a second pass back settles everything carried leftwards.
@@ -75,7 +87,14 @@ export function flowRows() {
     while (x < W) {
       if (!open[row + x]) { x++; continue; }
       let e = x; while (e + 1 < W && open[row + e + 1]) e++;
-      solveRun(row + x, 1, e - x + 1, x, y, 1, 0, FX, HDX);
+      // the awake stretches of this run, each held at the pressure of the sleeping cell beyond its ends
+      const crow = (y >> CSHIFT) * CW;
+      for (let s = x; s <= e;) {
+        if (!awake[crow + (s >> CSHIFT)]) { s = ((s >> CSHIFT) + 1) << CSHIFT; continue; }
+        let t = s; while (t + 1 <= e && awake[crow + ((t + 1) >> CSHIFT)]) t++;
+        solveRun(row + s, 1, t - s + 1, s, y, 1, 0, FX, HDX, s > x, t < e);
+        s = t + 1;
+      }
       x = e + 1;
     }
   }
@@ -86,7 +105,13 @@ export function flowCols() {
     while (y < H) {
       if (!open[y * W + x]) { y++; continue; }
       let e = y; while (e + 1 < H && open[(e + 1) * W + x]) e++;
-      solveRun(y * W + x, W, e - y + 1, x, y, 0, 1, FY, HDY);
+      const ccol = x >> CSHIFT;
+      for (let s = y; s <= e;) {
+        if (!awake[(s >> CSHIFT) * CW + ccol]) { s = ((s >> CSHIFT) + 1) << CSHIFT; continue; }
+        let t = s; while (t + 1 <= e && awake[((t + 1) >> CSHIFT) * CW + ccol]) t++;
+        solveRun(s * W + x, W, t - s + 1, x, s, 0, 1, FY, HDY, s > y, t < e);
+        s = t + 1;
+      }
       y = e + 1;
     }
   }
@@ -99,7 +124,9 @@ export function carryFlow() {
   for (let y = 0; y < H; y++) {
     const edgeY = y === 0 || y === H - 1;
     let i = y * W;
+    const crow = (y >> CSHIFT) * CW;
     for (let x = 0; x < W; x++, i++) {
+      if (!awake[crow + (x >> CSHIFT)]) { GX[i] = FX[i]; GY[i] = FY[i]; continue; }
       const oi = open[i];
       // right face, between i and i + 1
       if (!oi || x === W - 1 || !open[i + 1]) GX[i] = 0;
@@ -178,9 +205,10 @@ export function diffusePressure() {
   for (let it = 0; it < P_ITERS; it++) {
     for (let y = 1; y < H - 1; y++) {
       let i = y * W + 1;
+      const crow = (y >> CSHIFT) * CW;
       for (let x = 1; x < W - 1; x++, i++) {
         const p = P[i];
-        if (!smooth[i]) { P2[i] = p; continue; }
+        if (!smooth[i] || !awake[crow + (x >> CSHIFT)]) { P2[i] = p; continue; }
         let acc = 0;
         if (smooth[i - 1]) acc += P[i - 1] - p;
         if (smooth[i + 1]) acc += P[i + 1] - p;
@@ -196,7 +224,7 @@ export function diffusePressure() {
   }
   // Gas that was squeezed this frame gets hotter, gas that expanded gets colder (adiabatic change).
   for (let i = 0; i < N; i++) {
-    if (!open[i]) continue;
+    if (!open[i] || !awake[((i / W | 0) >> CSHIFT) * CW + ((i % W) >> CSHIFT)]) continue;
     let p = P[i];
     p = p > 200 ? 200 : p < 0 ? 0 : p;
     P[i] = p;
@@ -266,8 +294,9 @@ export function advectAir() {
   let any = false;
   for (let y = 1; y < H - 1; y++) {
     let i = y * W + 1;
+    const crow = (y >> CSHIFT) * CW;
     for (let x = 1; x < W - 1; x++, i++) {
-      if (st[i] !== NONE) continue;
+      if (st[i] !== NONE || !awake[crow + (x >> CSHIFT)]) continue;
       const inv = 0.5 / (P[i] > 0.3 ? P[i] : 0.3);
       let ux = (FX[i - 1] + FX[i]) * inv, uy = (FY[i - W] + FY[i]) * inv;
       if (ux < 0.05 && ux > -0.05 && uy < 0.05 && uy > -0.05) continue;
@@ -284,8 +313,9 @@ export function advectAir() {
   // burnt gas and fresh air mix where they meet, and the edge of the bench is always fresh
   for (let y = 1; y < H - 1; y++) {
     let i = y * W + 1;
+    const crow = (y >> CSHIFT) * CW;
     for (let x = 1; x < W - 1; x++, i++) {
-      if (st[i] !== NONE) continue;
+      if (st[i] !== NONE || !awake[crow + (x >> CSHIFT)]) continue;
       let sum = 0, n = 0;
       if (st[i - 1] === NONE) { sum += ox[i - 1]; n++; }
       if (st[i + 1] === NONE) { sum += ox[i + 1]; n++; }
@@ -331,7 +361,9 @@ export function diffuseHeat() {
   }
   for (let y = 1; y < H - 1; y++) {
     let i = y * W + 1;
+    const crow = (y >> CSHIFT) * CW;
     for (let x = 1; x < W - 1; x++, i++) {
+      if (!awake[crow + (x >> CSHIFT)]) { temp2[i] = temp[i]; continue; }
       const c = cnd[i], t0 = temp[i];
       let acc = 0, k;
       k = cnd[i - 1]; acc += (k < c ? k : c) * (temp[i - 1] - t0);

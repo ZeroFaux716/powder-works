@@ -10,6 +10,7 @@ import { nDX, nDY, nFast, nLife, nX, nY, radiate, stepNeutrons } from './neutron
 import { updateCell } from './cells.js';
 import { FX, FY, P, advectAir, diffuseHeat, diffusePressure, liquidPressure, temp } from './flow.js';
 import { physicsStep, rebuildGround, spawn } from './parts.js';
+import { scanChunks, wakeAll } from './sleep.js';
 import { buildJoint, jrecs } from './joints.js';
 
 export let tick = 0, cur = 1;
@@ -59,6 +60,7 @@ export function restore(snap) {
     jrecs.push(rec);
   }
   for (const k of snap.pass || []) passPairs.add(k);   // (saves from before 0.3 have none)
+  wakeAll();
   G.groundDirty = true;
   rebuildGround();
 }
@@ -109,6 +111,7 @@ export function step() {
   }
   electric();
   stepNeutrons();
+  scanChunks();
   diffusePressure();
   liquidPressure();
   advectAir();
@@ -123,6 +126,7 @@ export function clearAll() {
   bodies.clear();
   jrecs.length = 0;
   passPairs.clear();
+  wakeAll();
   G.nCount = 0;
   LP.fill(0); G.lpCells = []; lit.fill(0);
   fan.fill(0); dset.fill(0); gate.fill(1); ddir.fill(0); FX.fill(0); FY.fill(0);
