@@ -1,9 +1,10 @@
 // Rigid parts made of cells: building them, stamping them into the grid, melting and breaking.
 import * as planck from 'planck';
+import { meltWith } from './alloys.js';
 import { AMBIENT, DRAFT, DT, GAMMA, GAS, GRAVITY, H, LIQUID, N, NONE, P0, PART, PFORCE, S, SKIN, SOL, STATIC, W, WIND } from './constants.js';
 import { MATS } from './materials.js';
 import { DENS, MELT } from './tables.js';
-import { G, LP, aux, bid, bodies, lat, life, ox, pairKey, passPairs, st, stamp, type, world } from './grid.js';
+import { sol, sx, sh, G, LP, aux, bid, bodies, lat, life, ox, pairKey, passPairs, st, stamp, type, world } from './grid.js';
 import { NB, fk, phase } from './reactions.js';
 import { FX, FY, P, temp } from './flow.js';
 import { buildJoint, dropJoint, jrecs, removeJoint, springEnds } from './joints.js';
@@ -60,7 +61,8 @@ export function spawn(occ, temps, w, h, ox, oy, R, x, y, angle, matId, id, lats)
   addFixtures(b, occ, w, h, ox, oy, matId);
   if (!id) { id = G.nextId++; if (G.nextId > 65000) G.nextId = 1; }
   b.setUserData(id);
-  const rb = { id, b, occ, temps, lats: lats || new Float32Array(w * h), w, h, ox, oy, R, mat: matId, foot: [], footK: [], old: [], lastPos: planck.Vec2(x, y), lastAngle: angle };
+  // sol, sx: what is dissolved in the part's metal, if it is an alloy (the same all through the part)
+  const rb = { id, b, occ, temps, lats: lats || new Float32Array(w * h), w, h, ox, oy, R, mat: matId, sol: 0, sx: 0, foot: [], footK: [], old: [], lastPos: planck.Vec2(x, y), lastAngle: angle };
   bodies.set(id, rb);
   return rb;
 }
@@ -193,6 +195,7 @@ export function placeBody(rb) {
     }
     fk[i] = fpK[n];
     type[i] = rb.mat; st[i] = PART; bid[i] = rb.id; temp[i] = rb.temps[fpK[n]]; lat[i] = rb.lats[fpK[n]]; life[i] = 0; aux[i] = 0; P[i] = 0;
+    if (rb.sx) { sol[i] = rb.sol; sx[i] = rb.sx; sh[i] = rb.mat; } else sx[i] = 0;
     rb.foot.push(i); rb.footK.push(fpK[n]);
   }
   return true;
@@ -276,7 +279,7 @@ export function floatOn(rb) {
 // Cells of a part that reach the melting point drip off as liquid. What is left is re-shaped,
 // and if the part is cut in two, each piece carries on as its own part.
 export function meltPart(rb) {
-  const melt = MELT[rb.mat], t = rb.mat;
+  const melt = meltWith(rb.mat, rb.sx), t = rb.mat;
   let changed = false;
   for (let k = 0; k < rb.foot.length; k++) {
     const i = rb.foot[k];
@@ -324,6 +327,7 @@ export function refit(rb) {
       nb.b.setLinearVelocity(planck.Vec2(v.x, v.y));
       nb.b.setAngularVelocity(rb.b.getAngularVelocity());
       inheritPasses(rb.id, nb.id);
+      nb.sol = rb.sol; nb.sx = rb.sx;
       pieces.set(L, nb);
     }
   }

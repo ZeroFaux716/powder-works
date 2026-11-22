@@ -10,7 +10,7 @@ import { FX, FY, P, temp } from './sim/flow.js';
 import { bodiesAt, removeBody } from './sim/parts.js';
 import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, removeJoint, setJointKind, setMotor, setSpring, snapPoint, springEnds, ungrab } from './sim/joints.js';
 import { restore, snapshot, step } from './sim/world.js';
-import { massShare, solute } from './sim/alloys.js';
+import { alloyName, massOf, massShare, meltWith, pct, solute } from './sim/alloys.js';
 import { addBody, cellsRect, draft, finishPart, floodRegion, lineCells, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
 
@@ -66,6 +66,8 @@ const TOOL_HINTS = {
 };
 
 let tool = 'fire', view = 0, playing = false, brush = 3, preset = 'engine', curMat = ID.sand;
+// an alloy picked from Made so far: { h: metal id, s: dissolved id, x: atom fraction, name, wt: share by mass }
+let curAlloy = null;
 let down = false, lastX = -1, lastY = -1, hoverX = -1, hoverY = -1, hoverFX = -1, hoverFY = -1, dragX = 0, dragY = 0;
 // Powder Toy's drawing keys: Shift-drag a line, Ctrl-drag (Cmd on a Mac) a filled rectangle, with Alt held
 // the line snaps to 45° steps and the rectangle to a square; Ctrl+Shift-click fills an area.
@@ -407,7 +409,8 @@ function partMat() {
 }
 
 const BRUSHED = { brush: 1, part: 1, fire: 1, heat: 1, cool: 1, fan: 1, erase: 1, contact: 1, wire: 1, plug: 1, injector: 1, valve: 1, switch: 1, heater: 1, sensor: 1, inverter: 1, pump: 1, electrode: 1 };
-function dab(x, y) { paint(x, y, tool, brush - 1, tool === 'part' ? partMat() : tool === 'fan' ? fanDir : curMat); }
+const toolAlloy = () => curAlloy && (tool === 'brush' || tool === 'part' || tool === 'block') ? curAlloy : null;
+function dab(x, y) { paint(x, y, tool, brush - 1, tool === 'part' ? partMat() : tool === 'fan' ? fanDir : curMat, false, toolAlloy()); }
 function stroke(x0, y0, x1, y1) {
   const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
   for (let k = 0; k <= n; k++) dab(Math.round(x0 + (x1 - x0) * k / n), Math.round(y0 + (y1 - y0) * k / n));
@@ -538,8 +541,8 @@ function showInspector() {
     const m = MATS[sel.rb.mat];
     const n = sel.rb.occ.reduce((a, v) => a + v, 0);
     const joints = jrecs.filter(r => r.A === sel.rb || r.B === sel.rb).length;
-    insTitle.textContent = m.name + ' part';
-    insSub.textContent = 'Melts at ' + m.melt + ' °C · ' + n + ' cells' + (joints ? ' · ' + joints + (joints === 1 ? ' joint' : ' joints') : '');
+    insTitle.textContent = partName(sel.rb) + ' part';
+    insSub.textContent = 'Melts at ' + Math.round(meltWith(sel.rb.mat, sel.rb.sx)) + ' °C · ' + n + ' cells' + (joints ? ' · ' + joints + (joints === 1 ? ' joint' : ' joints') : '');
     insKind.hidden = true; insMotor.hidden = true; insRotate.hidden = false;
     document.getElementById('insDelete').textContent = 'Delete part';
     return;
@@ -767,6 +770,71 @@ function showMade() {
   }
   rememberMade();
 }
+// ---------- alloys you have made ----------
+// Any solid alloy on the bench (cast, frozen, or a part) counts as made. Each kind (Steel, Bronze, "Nickel with
+// 12% copper") gets one button in Made so far, with the make-up it had most recently; it paints and draws parts
+// in that alloy. Kept by the browser and in save files, by material name.
+const ALLOYS_KEY = 'powder-works-alloys';
+const alloysMade = new Map();                    // kind name -> { h, s, x, wt, name }
+const alloyKey = a => MATS[a.h].key + ':' + MATS[a.s].key;
+function alloyColor(a) {
+  const c = MATS[a.h].color, cs = MATS[a.s].color, k = Math.min(0.6, a.x * 2.5);
+  return c.map((v, n) => Math.round(v + (cs[n] - v) * k));
+}
+function alloyEntry(h, s, x) {
+  const wt = massOf(h, s, x);
+  return { h, s, x, wt, name: alloyName(h, s, wt) };
+}
+// a part's material, with its alloy name if it is one
+const partName = rb => rb.sx && rb.sol ? alloyName(rb.mat, rb.sol, massOf(rb.mat, rb.sol, rb.sx)) : MATS[rb.mat].name;
+function alloyButton(a) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.alloy = alloyKey(a);
+  b.setAttribute('aria-pressed', 'false');
+  const sw = document.createElement('span');
+  sw.className = 'sw'; sw.style.background = css(alloyColor(a));
+  b.append(sw, a.name + ' ' + pct(a.wt) + ' ' + MATS[a.s].sym);
+  b.title = MATS[a.h].name + ' with ' + pct(a.wt) + ' ' + MATS[a.s].name.toLowerCase() + ' by mass; melts at about ' + Math.round(meltWith(a.h, a.x)) + ' °C';
+  b.addEventListener('click', () => { setMat(a.h, alloysMade.get(a.kind) || a); openPalette(false); });
+  return b;
+}
+function addAlloy(a, quiet) {
+  a.kind = a.name.startsWith(MATS[a.h].name + ' with') ? alloyKey(a) : a.name;
+  const old = alloysMade.get(a.kind);
+  if (old && Math.abs(old.x - a.x) < 0.1 * old.x) return false;
+  alloysMade.set(a.kind, a);
+  const btn = madeEl.querySelector('[data-alloy-kind="' + CSS.escape(a.kind) + '"]'), nb = alloyButton(a);
+  nb.dataset.alloyKind = a.kind;
+  if (btn) btn.replaceWith(nb); else madeEl.appendChild(nb);
+  madeHead.hidden = false;
+  if (curAlloy && curAlloy.kind === a.kind) setMat(a.h, a);
+  try { localStorage.setItem(ALLOYS_KEY, JSON.stringify([...alloysMade.values()].map(v => [MATS[v.h].key, MATS[v.s].key, v.x]))); } catch (e) {}
+  if (!old && !quiet) setHint('New alloy: ' + a.name + ' (' + pct(a.wt) + ' ' + MATS[a.s].name.toLowerCase() + '). It is in Materials under Made so far.');
+  return !old;
+}
+function learnAlloys(list, quiet) {
+  let n = 0;
+  for (const [hk, sk, x] of list || []) if (ID[hk] !== undefined && ID[sk] !== undefined && x > 0) n += addAlloy(alloyEntry(ID[hk], ID[sk], x), quiet) ? 1 : 0;
+  return n;
+}
+// look over the bench for solid alloys
+function scanAlloys(quiet) {
+  const sums = new Map();
+  for (let i = 0; i < N; i++) {
+    if (!sx[i]) continue;
+    const s = st[i];
+    if (s !== STATIC && s !== POWDER && s !== PART) continue;
+    const so = solute(i);
+    if (!so) continue;
+    const k = type[i] * 65536 + so, e = sums.get(k) || [0, 0];
+    e[0] += sx[i]; e[1]++; sums.set(k, e);
+  }
+  let n = 0;
+  for (const [k, [sum, cnt]] of sums) if (cnt >= 4) n += addAlloy(alloyEntry(Math.floor(k / 65536), k % 65536, sum / cnt), quiet) ? 1 : 0;
+  return n;
+}
+
 function palButton(m, text) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -858,11 +926,13 @@ function openPalette(show) {
 matBtn.addEventListener('click', () => openPalette(palette.hidden));
 document.getElementById('palClose').addEventListener('click', () => openPalette(false));
 
-function setMat(id) {
+function setMat(id, alloy) {
   curMat = id;
+  curAlloy = alloy && alloy.h === id ? alloy : null;
   const m = MATS[id];
-  document.getElementById('matSw').style.background = css(m.color);
-  document.getElementById('matName').textContent = m.name;
+  document.getElementById('matSw').style.background = css(curAlloy ? alloyColor(curAlloy) : m.color);
+  document.getElementById('matName').textContent = curAlloy ? curAlloy.name : m.name;
+  document.querySelectorAll('[data-alloy]').forEach(b => b.setAttribute('aria-pressed', curAlloy && b.dataset.alloy === alloyKey(curAlloy) ? 'true' : 'false'));
   const pc = css(MATS[partMat()].color);
   document.getElementById('partSw').style.background = pc;
   document.getElementById('blockSw').style.background = pc;
@@ -991,14 +1061,14 @@ function shapeCells() {
   return out;
 }
 const toolMat = () => tool === 'part' ? partMat() : tool === 'fan' ? fanDir : curMat;
-function paintCells(cells) { const m = toolMat(); for (const i of cells) paint(i % W, (i / W) | 0, tool, 0, m, true); }
+function paintCells(cells) { const m = toolMat(), a = toolAlloy(); for (const i of cells) paint(i % W, (i / W) | 0, tool, 0, m, true, a); }
 function applyShape() { paintCells(shapeCells()); }
 function floodFill(x, y) {
   const cells = floodRegion(x, y);
   if (!cells.length) { setHint('Fill works on empty space or loose material, not on a part.'); return; }
   paintCells(cells);
   if (tool === 'part') {
-    const n = finishPart();
+    const n = finishPart(toolAlloy());
     if (n) setHint((n === 1 ? 'Part made' : n + ' parts made') + passNote() + '. Join parts with Hinge.');
   } else setHint('Filled ' + cells.length + ' squares.');
 }
@@ -1025,11 +1095,11 @@ function release() {
     setHint('Slider added. The part can now only move along the dashed track.');
   } else if (drag && drag.mode === 'grab') ungrab(drag.j);
   else if (tool === 'block') {
-    const rb = makePart(cellsRect(dragX, dragY, lastX, lastY), partMat());
+    const rb = makePart(cellsRect(dragX, dragY, lastX, lastY), partMat(), toolAlloy());
     if (rb) select({ rb });
-    setHint(rb ? MATS[rb.mat].name + ' block placed' + passNote() + '. Pin it with Hinge, or let it fall.' : 'A block needs clear space. Drag it where no wall is in the way.');
+    setHint(rb ? partName(rb) + ' block placed' + passNote() + '. Pin it with Hinge, or let it fall.' : 'A block needs clear space. Drag it where no wall is in the way.');
   } else if (tool === 'part') {
-    const n = finishPart();
+    const n = finishPart(toolAlloy());
     if (n) setHint((n === 1 ? 'Part made' : n + ' parts made') + passNote() + '. Join parts with Hinge.');
   }
   drag = null;
@@ -1160,6 +1230,7 @@ function frame() {
     if (MATS[news].gen) setHint('New compound: ' + MATS[news].name + ' (' + MATS[news].sym + '). It is in Materials under Made so far.');
     showMade();
   }
+  if (frameNo % 60 === 0) scanAlloys();
   if (++frameNo % 6 === 0) {
     if (hoverX >= 0) {
       const i = hoverY * W + hoverX;
@@ -1167,8 +1238,13 @@ function frame() {
       const fd = fan[i];
       const over = fd >= CONTACT ? devName(i) + (lit[i] >= 4 ? ' (live)' : '') + ' \u00b7 ' : fd && !SOL[st[i]] ? 'Fan \u00b7 ' : '';
       const burnt = st[i] === NONE && ox[i] < 0.95 ? ' (' + Math.round(100 - ox[i] * 100) + '% burnt)' : '';
-      const so = solute(i), mix = so ? ' (' + (100 * massShare(i)).toFixed(massShare(i) < 0.1 ? 1 : 0) + '% ' + MATS[so].name.toLowerCase() + ' by mass)' : '';
-      readoutEl.textContent = (G.nCount ? G.nCount + ' neutrons \u00b7 ' : '') + over + label(type[i], st[i]) + mix + burnt + ' · ' + Math.round(temp[i]) + ' °C' + p;
+      const so = solute(i);
+      let what = label(type[i], st[i]);
+      if (so) {
+        const wt = massShare(i), nm = alloyName(type[i], so, wt);
+        what = (st[i] === LIQUID ? 'Molten ' + nm.toLowerCase() : nm) + ' (' + pct(wt) + ' ' + MATS[so].name.toLowerCase() + ')';
+      }
+      readoutEl.textContent = (G.nCount ? G.nCount + ' neutrons \u00b7 ' : '') + over + what + burnt + ' · ' + Math.round(temp[i]) + ' °C' + p;
     } else readoutEl.textContent = G.nCount ? G.nCount + ' neutrons' : ' ';
   }
   requestAnimationFrame(frame);
@@ -1176,6 +1252,7 @@ function frame() {
 setMat(ID.sand);
 load('engine');
 showMade();   // compounds discovered on earlier visits
+try { learnAlloys(JSON.parse(localStorage.getItem(ALLOYS_KEY) || '[]'), true); } catch (e) {}
 requestAnimationFrame(frame);
 
 // ---------- undo / redo ----------
@@ -1252,7 +1329,7 @@ async function gzip(text, back) {
 // The file is a small JSON wrapper around the compressed bench, so it travels as an ordinary .json file.
 async function saveBench() {
   try {
-    const data = { app: 'powder-works', version: SAVE_VERSION, game: APP_VERSION, W, H, scene: preset, mats: MATS.map(m => m.key), made: [...made].filter(id => MATS[id].gen).map(id => MATS[id].key), snap: encodeValue(snapshot()) };
+    const data = { app: 'powder-works', version: SAVE_VERSION, game: APP_VERSION, W, H, scene: preset, mats: MATS.map(m => m.key), made: [...made].filter(id => MATS[id].gen).map(id => MATS[id].key), alloys: [...alloysMade.values()].map(v => [MATS[v.h].key, MATS[v.s].key, v.x]), snap: encodeValue(snapshot()) };
     const packed = new Uint8Array(await (await gzip(JSON.stringify(data))).arrayBuffer());
     let bin = '';
     for (let k = 0; k < packed.length; k += 0x8000) bin += String.fromCharCode.apply(null, packed.subarray(k, k + 0x8000));
@@ -1301,7 +1378,7 @@ async function openBench(file) {
     restore(snap);
     saved = null; rewindBtn.disabled = true; setPlaying(false);
     if (data.scene && HINTS[data.scene] !== undefined) { preset = data.scene; presetEl.value = data.scene; }
-    const learnt = learnMade(data.made) + learnFromBench();
+    const learnt = learnMade(data.made) + learnFromBench() + learnAlloys(data.alloys, true) + scanAlloys(true);
     showMade();
     setHint('Opened ' + file.name + '.' + (learnt ? ' ' + learnt + (learnt === 1 ? ' compound' : ' compounds') + ' from it added to Made so far.' : ''));
   } catch (err) {

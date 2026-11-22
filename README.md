@@ -18,6 +18,9 @@ hinges, motors, sliders and springs.
   squares, Ctrl+Shift-click fills an area. They work with every painting tool, including Part
 - An adjustable grid (2 to 16 cells) with Snap, which locks lines, boxes, Block corners, joints and moved parts to it
 - Compounds you discover stay in Made so far between visits and travel in save files
+- Alloys: molten metals mix and dissolve carbon and other elements, melt lower for it, and oxygen blown through
+  molten cast iron burns the carbon out first, making steel. Solid alloys you make (steel, cast iron, bronze,
+  "nickel with 12% copper") appear in Made so far, and paint and build parts in that alloy
 
 Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
 

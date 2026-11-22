@@ -3,9 +3,9 @@ import { CAPG, DRAFT, FLAME_GAIN, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, SO
 import { ID, MATS } from './materials.js';
 import { CRUDE_CUTS, NE0, PAIR_A, PAIR_PRODUCT, PAIR_RATIO, TAR } from './chemdata.js';
 import { BREAK, DROP, FORM, RISE, swapChance, swapHeat, tbin } from './energy.js';
-import { meltOf } from './alloys.js';
+import { alloyReact, meltOf } from './alloys.js';
 import { ACID_OF, ACID_X, BASE_METAL, BOIL, CAPS, CARBON, CPDI, ENV, FIRE, GASP, HYD, HYDROXIDE, LF, LV, MELT, METAL, NOCOND, OX, OXIDE_OF, RUST, SOLIDST, TROUT, WATER, stateAt } from './tables.js';
-import { G, LP, Pref, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
+import { sx, G, LP, Pref, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
 import { P, temp } from './flow.js';
 import { cur } from './world.js';
 
@@ -220,6 +220,7 @@ export function chemReact(i, x, y, t) {
     if ((k === 0 && x === 0) || (k === 1 && x === W - 1) || (k === 2 && y === 0) || (k === 3 && y === H - 1)) continue;
     const n = i + NB[k], tn = type[n], sn = st[n];
     if (sn === NONE || sn === DRAFT || tn >= NE0 || stamp[n] === cur) continue;
+    if ((sx[n] > 0 || sx[i] > 0) && alloyReact(i, n)) return true;
     const pk = t * NE0 + tn, pid = PAIR_PRODUCT[pk];
     if (!pid) continue;
     const ia = PAIR_A[pk], ib = ia === t ? tn : t;

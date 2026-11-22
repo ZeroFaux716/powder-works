@@ -23,7 +23,7 @@ export function snapshot() {
     bodies: Array.from(bodies.values(), rb => {
       const p = rb.b.getPosition(), v = rb.b.getLinearVelocity();
       return {
-        id: rb.id, occ: rb.occ.slice(), temps: rb.temps.slice(), lats: rb.lats.slice(), w: rb.w, h: rb.h, ox: rb.ox, oy: rb.oy, R: rb.R, mat: rb.mat,
+        id: rb.id, occ: rb.occ.slice(), temps: rb.temps.slice(), lats: rb.lats.slice(), w: rb.w, h: rb.h, ox: rb.ox, oy: rb.oy, R: rb.R, mat: rb.mat, sol: rb.sol, sx: rb.sx,
         foot: rb.foot.slice(), footK: rb.footK.slice(), x: p.x, y: p.y, a: rb.b.getAngle(), vx: v.x, vy: v.y, av: rb.b.getAngularVelocity()
       };
     }),
@@ -50,6 +50,7 @@ export function restore(snap) {
     rb.b.setLinearVelocity(planck.Vec2(d.vx, d.vy));
     rb.b.setAngularVelocity(d.av);
     rb.foot = d.foot.slice(); rb.footK = d.footK.slice();
+    rb.sol = d.sol || 0; rb.sx = d.sx || 0;
   }
   for (const jd of snap.joints) {
     const A = bodies.get(jd.A), B = jd.B ? bodies.get(jd.B) : null;

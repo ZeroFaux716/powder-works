@@ -6,6 +6,7 @@ import { sx, taken, CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERT
 import { burn, made } from './reactions.js';
 import { emit } from './neutrons.js';
 import { P, temp } from './flow.js';
+import { setSolute } from './alloys.js';
 import { letPass, makeBody, partCovers, placeBody, removeBody } from './parts.js';
 
 // Fill a rectangle with a material in the state it has at room temperature. key null clears it.
@@ -70,14 +71,18 @@ export const draft = new Uint16Array(N);
 export let strokeCells = [];
 export let passedLast = 0;   // how many parts the last part made was drawn over (for the hint)
 // A part from the Part or Block tool: it may lie over other parts, and passes through the ones it covers.
-export function makePart(cells, matId) {
+// alloy: { s, x }: the part is that alloy of matId, all through
+export function makePart(cells, matId, alloy) {
   const under = [];   // found by shape, so parts hidden under other parts count too
   for (const rb of bodies.values()) if (cells.some(i => partCovers(rb, i % W, (i / W) | 0))) under.push(rb.id);
   const rb = addBody(cells, matId, true);
-  if (rb) { for (const id of under) letPass(rb.id, id); passedLast = under.length; }
+  if (rb) {
+    for (const id of under) letPass(rb.id, id); passedLast = under.length;
+    if (alloy) { rb.sol = alloy.s; rb.sx = alloy.x; for (const i of rb.foot) if (bid[i] === rb.id) setSolute(i, alloy.s, alloy.x); }
+  }
   return rb;
 }
-export function finishPart() {
+export function finishPart(alloy) {
   const seen = new Set();
   let made = 0, passed = 0;
   for (const start of strokeCells) {
@@ -95,7 +100,7 @@ export function finishPart() {
       }
     }
     for (const i of comp) draft[i] = 0;
-    if (makePart(comp, matId)) { made++; passed += passedLast; }
+    if (makePart(comp, matId, alloy && alloy.h === matId ? alloy : null)) { made++; passed += passedLast; }
   }
   passedLast = passed;
   for (const i of strokeCells) draft[i] = 0;
@@ -149,7 +154,8 @@ export function floodRegion(x, y, limit = N) {
 // solid: fill every square (lines, rectangles and fills) instead of the brush's loose scatter of liquid and gas.
 export const DEV_TOOLS = { contact: CONTACT, wire: WIRE, plug: PLUG, injector: INJECTOR, valve: VALVE, switch: SWITCH, heater: HEATER, sensor: SENSE_T, inverter: INVERTER, pump: PUMP, electrode: ELECTRODE };
 // for the device tools matId carries the new device's setting (left out: the usual default)
-export function paint(cx, cy, tool, r, matId, solid) {
+// alloy: { s, x }: paint the metal with that dissolved in it (an alloy picked from Made so far)
+export function paint(cx, cy, tool, r, matId, solid, alloy) {
   const m = matId !== undefined && tool !== 'fan' && !DEV_TOOLS[tool] ? MATS[matId] : null;
   const ms = m ? stateAt(m, AMBIENT) : NONE;
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -196,9 +202,10 @@ export function paint(cx, cy, tool, r, matId, solid) {
     } else if (tool === 'part') {
       if (s !== STATIC && !draft[i]) { draft[i] = m.id; strokeCells.push(i); }
     } else if (ms === STATIC) {
-      if (!SOL[s]) { type[i] = m.id; st[i] = STATIC; life[i] = 0; aux[i] = 0; lat[i] = 0; sx[i] = 0; taken[i] = 0; temp[i] = AMBIENT; P[i] = P0; G.groundDirty = true; }
+      if (!SOL[s]) { type[i] = m.id; st[i] = STATIC; life[i] = 0; aux[i] = 0; lat[i] = 0; sx[i] = 0; taken[i] = 0; temp[i] = AMBIENT; P[i] = P0; G.groundDirty = true; if (alloy) setSolute(i, alloy.s, alloy.x); }
     } else if (s === NONE && (solid || Math.random() < (ms === GAS ? 0.6 : 0.8))) {
       type[i] = m.id; st[i] = ms; temp[i] = AMBIENT; life[i] = 0; aux[i] = 0; lat[i] = 0; sx[i] = 0; taken[i] = 0;
+      if (alloy) setSolute(i, alloy.s, alloy.x);
     }
   }
 }
