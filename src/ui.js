@@ -481,7 +481,7 @@ function deviceAt(x, y) {
     const nx = x + dx, ny = y + dy;
     if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
     const i = ny * W + nx, d = fan[i];
-    if (d < VALVE || d === WIRE) continue;
+    if (d < INJECTOR || d === WIRE) continue;   // (contacts, wire and plugs have nothing to set)
     const cells = [i], seen = new Set(cells);
     for (let h = 0; h < cells.length; h++) {
       const c = cells[h], cx = c % W, cy = (c / W) | 0;
@@ -1004,7 +1004,10 @@ canvas.addEventListener('pointerdown', ev => {
     drag = { mode: 'slider', A: near[0], x: s.x, y: s.y, cx: fx, cy: fy };
   } else if (tool === 'move') {
     const jn = jointNear(fx, fy, 1.6);
-    const rb = bodiesAt(x, y, 0)[0] || bodiesAt(x, y, 1)[0];
+    // a device wins over a part that is merely next to it (the engine's injector sits beside its piston)
+    const rb0 = bodiesAt(x, y, 0)[0];
+    const devHere = !jn && !rb0 ? deviceAt(x, y) : null;
+    const rb = devHere ? null : rb0 || bodiesAt(x, y, 1)[0];
     if (jn) {
       // a click selects the joint; dragging from it moves the part underneath instead
       select({ rec: jn });
@@ -1012,7 +1015,7 @@ canvas.addEventListener('pointerdown', ev => {
       return;
     }
     if (!rb) {
-      const dev = deviceAt(x, y);
+      const dev = devHere || deviceAt(x, y);
       select(dev);
       if (dev && dev.dev === SWITCH) { setDevice(dset[dev.cells[0]] ? 0 : 1); setHint('Switch turned ' + (dset[dev.cells[0]] ? 'on.' : 'off.')); }
       down = false; return;
