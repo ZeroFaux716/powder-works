@@ -16,6 +16,7 @@ hinges, motors, sliders and springs.
 - Undo/redo, save/open, five views (materials, pressure, heat, flow, burnt gas)
 - Powder Toy's drawing keys: Shift-drag a line, Ctrl-drag (Cmd on a Mac) a filled box, Alt snaps them to 45° and
   squares, Ctrl+Shift-click fills an area. They work with every painting tool, including Part
+- An adjustable grid (2 to 16 cells) with Snap, which locks lines, boxes, Block corners, joints and moved parts to it
 
 Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
 

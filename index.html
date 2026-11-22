@@ -40,6 +40,14 @@
     <input id="fileIn" type="file" accept=".json,application/json" hidden>
     <button id="edges" type="button" aria-pressed="true" title="Whether things leave at the edge of the bench">Edges: open</button>
   </div>
+  <div class="group" role="group" aria-label="Grid">
+    <button id="grid" type="button" aria-pressed="false" title="Show a grid over the bench">Grid</button>
+    <select id="gridSize" aria-label="Grid spacing" title="Grid spacing, in cells">
+      <option value="2">2</option><option value="4">4</option><option value="5">5</option>
+      <option value="8">8</option><option value="10" selected>10</option><option value="16">16</option>
+    </select>
+    <button id="snap" type="button" aria-pressed="false" title="Lock lines, boxes, blocks, joints and moved parts to the grid">Snap</button>
+  </div>
   <span class="spacer"></span>
   <div class="group" role="group" aria-label="View">
     <button type="button" data-view="0" aria-pressed="true">Materials</button>

@@ -69,6 +69,20 @@ let down = false, lastX = -1, lastY = -1, hoverX = -1, hoverY = -1, hoverFX = -1
 // Powder Toy's drawing keys: Shift-drag a line, Ctrl-drag (Cmd on a Mac) a filled rectangle, with Alt held
 // the line snaps to 45° steps and the rectangle to a square; Ctrl+Shift-click fills an area.
 let shape = null, altHeld = false, altUsed = false;
+
+// ---------- grid ----------
+// Grid lines run through cell centres every gridN cells. With Snap on, line and box ends, Block corners,
+// joints and moved parts lock to it. Kept by the browser between visits, not in saved benches.
+let gridOn = false, gridN = 10, snapOn = false;
+try { const g = JSON.parse(localStorage.getItem('powder-works-grid') || 'null'); if (g) { gridOn = !!g.on; gridN = +g.n || 10; snapOn = !!g.snap; } } catch (e) {}
+const keepGrid = () => { try { localStorage.setItem('powder-works-grid', JSON.stringify({ on: gridOn, n: gridN, snap: snapOn })); } catch (e) {} };
+const snapCell = v => snapOn ? Math.round(v / gridN) * gridN : v;
+// joints: an existing joint or a part's centre still wins when the pointer is right on it
+function snapAt(fx, fy) {
+  const s = snapPoint(fx, fy);
+  if (!snapOn || s.joint || s.center) return s;
+  return { x: snapCell(Math.floor(fx)) + 0.5, y: snapCell(Math.floor(fy)) + 0.5 };
+}
 let drag = null, sel = null, snap = null, fanDir = 1;
 
 function label(t, s) {
@@ -242,6 +256,18 @@ function showHiddenParts(selId) {
   }
 }
 
+function drawGrid() {
+  // faint lines through cell centres; every 5th a little stronger, for counting
+  for (const strong of [false, true]) {
+    octx.beginPath();
+    for (let k = 0, x = 0; x < W; k++, x += gridN) if ((k % 5 === 0) === strong) { octx.moveTo((x + 0.5) * OS, 0); octx.lineTo((x + 0.5) * OS, H * OS); }
+    for (let k = 0, y = 0; y < H; k++, y += gridN) if ((k % 5 === 0) === strong) { octx.moveTo(0, (y + 0.5) * OS); octx.lineTo(W * OS, (y + 0.5) * OS); }
+    octx.lineWidth = 1;
+    octx.strokeStyle = strong ? 'rgba(183,198,214,0.28)' : 'rgba(183,198,214,0.12)';
+    octx.stroke();
+  }
+}
+
 function ring(x, y, rad, color, width, dash) {
   octx.beginPath();
   octx.arc(x * OS, y * OS, rad, 0, Math.PI * 2);
@@ -266,6 +292,7 @@ function zigzag(ax, ay, bx, by, color, width) {
 }
 function drawOverlay() {
   octx.clearRect(0, 0, over.width, over.height);
+  if (gridOn && view === 0) drawGrid();
   for (const rec of jrecs) {
     const [x, y] = jointPoint(rec);
     const chosen = sel && sel.rec === rec;
@@ -821,7 +848,7 @@ document.querySelectorAll('[data-mat]').forEach(b => b.addEventListener('click',
 
 // ---------- pointer ----------
 function placeJoint(kind, fx, fy) {
-  const s = snapPoint(fx, fy);
+  const s = snapAt(fx, fy);
   if (s.joint) {
     select({ rec: s.joint });
     setHint('Joint selected. Change it in the panel.');
@@ -850,16 +877,17 @@ canvas.addEventListener('pointerdown', ev => {
   const [fx, fy] = pointAt(ev);
   const x = Math.floor(fx), y = Math.floor(fy);
   down = true; lastX = x; lastY = y; dragX = x; dragY = y; hoverX = x; hoverY = y;
+  if (tool === 'block') { dragX = lastX = snapCell(x); dragY = lastY = snapCell(y); }
   if (tool === 'hinge' || tool === 'motor') {
     placeJoint(tool, fx, fy);
     down = false;
   } else if (tool === 'spring') {
-    const s = snapPoint(fx, fy);
+    const s = snapAt(fx, fy);
     const near = bodiesAt(Math.floor(s.x), Math.floor(s.y), 2);
     if (!near.length) { setHint('Press on a part, then drag to where the spring\u2019s other end goes.'); down = false; return; }
     drag = { mode: 'spring', A: near[0], x: s.x, y: s.y, cx: fx, cy: fy };
   } else if (tool === 'slider') {
-    const s = snapPoint(fx, fy);
+    const s = snapAt(fx, fy);
     if (s.joint) { select({ rec: s.joint }); down = false; return; }
     const near = bodiesAt(Math.floor(s.x), Math.floor(s.y), 2);
     if (!near.length) { setHint('Press on a part, then drag the way it should slide.'); down = false; return; }
@@ -884,8 +912,8 @@ canvas.addEventListener('pointerdown', ev => {
     const ctrl = ev.ctrlKey || ev.metaKey;
     altHeld = ev.altKey;
     if (ctrl && ev.shiftKey) { floodFill(x, y); down = false; }
-    else if (ev.shiftKey) shape = { kind: 'line', x0: x, y0: y, x1: x, y1: y };
-    else if (ctrl) shape = { kind: 'rect', x0: x, y0: y, x1: x, y1: y };
+    else if (ev.shiftKey) shape = { kind: 'line', x0: snapCell(x), y0: snapCell(y), x1: snapCell(x), y1: snapCell(y) };
+    else if (ctrl) shape = { kind: 'rect', x0: snapCell(x), y0: snapCell(y), x1: snapCell(x), y1: snapCell(y) };
     else dab(x, y);
   }
 });
@@ -899,12 +927,13 @@ canvas.addEventListener('pointermove', ev => {
   if (drag && (drag.mode === 'slider' || drag.mode === 'spring')) { drag.cx = fx; drag.cy = fy; }
   else if (drag && drag.mode === 'grab') drag.j.setTarget(planck.Vec2(fx * S, fy * S));
   else if (drag && drag.mode === 'move') {
-    const dx = Math.round(fx - drag.sx), dy = Math.round(fy - drag.sy);
+    const dx = snapCell(Math.round(fx - drag.sx)), dy = snapCell(Math.round(fy - drag.sy));
     if (dx !== drag.dx || dy !== drag.dy) {
       if (movePart(drag.rb, drag.px + dx * S, drag.py + dy * S, drag.rb.b.getAngle())) { drag.dx = dx; drag.dy = dy; }
     }
-  } else if (shape) { shape.x1 = x; shape.y1 = y; altHeld = ev.altKey; }
+  } else if (shape) { shape.x1 = snapCell(x); shape.y1 = snapCell(y); altHeld = ev.altKey; }
   else if (BRUSHED[tool]) stroke(lastX, lastY, x, y);
+  if (tool === 'block') { lastX = snapCell(x); lastY = snapCell(y); return; }
   lastX = x; lastY = y;
 });
 
@@ -956,7 +985,7 @@ function release() {
   down = false;
   if (shape) { applyShape(); shape = null; }
   if (drag && drag.mode === 'spring') {
-    const end = snapPoint(drag.cx, drag.cy);
+    const end = snapAt(drag.cx, drag.cy);
     if (Math.hypot(end.x - drag.x, end.y - drag.y) < 1.5) setHint('Drag further: a spring needs some length.');
     else {
       const other = bodiesAt(Math.floor(end.x), Math.floor(end.y), 1).find(rb => rb !== drag.A) || null;
@@ -1097,7 +1126,7 @@ function frame() {
   if (down && BRUSHED[tool] && tool !== 'part' && !shape) dab(lastX, lastY);
   if (playing) step();
   if (sel && ((sel.rb && !bodies.has(sel.rb.id)) || (sel.rec && !jrecs.includes(sel.rec)) || (sel.dev && fan[sel.cells[0]] !== sel.dev))) select(null);
-  snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapPoint(hoverFX, hoverFY) : null;
+  snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapAt(hoverFX, hoverFY) : null;
   render();
   const news = G.madeNews;
   if (news !== null) {
@@ -1255,6 +1284,22 @@ fileIn.addEventListener('change', () => { if (fileIn.files[0]) openBench(fileIn.
 // a save file dropped onto the bench opens too
 canvas.addEventListener('dragover', ev => { ev.preventDefault(); });
 canvas.addEventListener('drop', ev => { ev.preventDefault(); const f = ev.dataTransfer.files[0]; if (f) openBench(f); });
+
+const gridBtn = document.getElementById('grid'), gridSizeEl = document.getElementById('gridSize'), snapBtn = document.getElementById('snap');
+function showGridState() {
+  gridBtn.setAttribute('aria-pressed', gridOn ? 'true' : 'false');
+  snapBtn.setAttribute('aria-pressed', snapOn ? 'true' : 'false');
+  gridSizeEl.value = String(gridN);
+}
+showGridState();
+gridBtn.addEventListener('click', () => { gridOn = !gridOn; showGridState(); keepGrid(); setHint(gridOn ? 'Grid on, every ' + gridN + ' cells.' + (snapOn ? '' : ' Turn on Snap to lock lines, boxes, joints and moves to it.') : 'Grid hidden.' + (snapOn ? ' Snap stays on.' : '')); });
+gridSizeEl.addEventListener('change', () => { gridN = +gridSizeEl.value; keepGrid(); setHint('Grid every ' + gridN + ' cells.'); });
+snapBtn.addEventListener('click', () => {
+  snapOn = !snapOn;
+  if (snapOn && !gridOn) gridOn = true;          // snapping to a grid you cannot see would be confusing
+  showGridState(); keepGrid();
+  setHint(snapOn ? 'Snap on: Shift lines, Ctrl boxes, Block corners, joints and moved parts lock to the grid. Freehand drawing stays free.' : 'Snap off.');
+});
 
 const edgesBtn = document.getElementById('edges');
 edgesBtn.addEventListener('click', () => {
