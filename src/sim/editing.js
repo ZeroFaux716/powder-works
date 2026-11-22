@@ -2,7 +2,7 @@
 import { AMBIENT, DRAFT, GAS, H, N, NONE, P0, PART, SOL, STATIC, W } from './constants.js';
 import { ID, MATS } from './materials.js';
 import { FIRE, stateAt } from './tables.js';
-import { CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, PLUG, PUMP, Pref, SENSE_T, SWITCH, VALVE, WIRE, aux, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, st, type, world } from './grid.js';
+import { sx, taken, CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, PLUG, PUMP, Pref, SENSE_T, SWITCH, VALVE, WIRE, aux, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, st, type, world } from './grid.js';
 import { burn, made } from './reactions.js';
 import { emit } from './neutrons.js';
 import { P, temp } from './flow.js';
@@ -16,7 +16,7 @@ export function fill(x0, y0, x1, y1, key) {
   const s = m ? stateAt(m, AMBIENT) : NONE;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     const i = y * W + x;
-    type[i] = m ? m.id : 0; st[i] = s; temp[i] = AMBIENT; life[i] = 0; aux[i] = 0; lat[i] = 0;
+    type[i] = m ? m.id : 0; st[i] = s; temp[i] = AMBIENT; life[i] = 0; aux[i] = 0; lat[i] = 0; sx[i] = 0; taken[i] = 0;
   }
   G.groundDirty = true;
 }
@@ -196,9 +196,9 @@ export function paint(cx, cy, tool, r, matId, solid) {
     } else if (tool === 'part') {
       if (s !== STATIC && !draft[i]) { draft[i] = m.id; strokeCells.push(i); }
     } else if (ms === STATIC) {
-      if (!SOL[s]) { type[i] = m.id; st[i] = STATIC; life[i] = 0; aux[i] = 0; lat[i] = 0; temp[i] = AMBIENT; P[i] = P0; G.groundDirty = true; }
+      if (!SOL[s]) { type[i] = m.id; st[i] = STATIC; life[i] = 0; aux[i] = 0; lat[i] = 0; sx[i] = 0; taken[i] = 0; temp[i] = AMBIENT; P[i] = P0; G.groundDirty = true; }
     } else if (s === NONE && (solid || Math.random() < (ms === GAS ? 0.6 : 0.8))) {
-      type[i] = m.id; st[i] = ms; temp[i] = AMBIENT; life[i] = 0; aux[i] = 0; lat[i] = 0;
+      type[i] = m.id; st[i] = ms; temp[i] = AMBIENT; life[i] = 0; aux[i] = 0; lat[i] = 0; sx[i] = 0; taken[i] = 0;
     }
   }
 }

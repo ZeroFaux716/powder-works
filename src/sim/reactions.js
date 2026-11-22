@@ -3,6 +3,7 @@ import { CAPG, DRAFT, FLAME_GAIN, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, SO
 import { ID, MATS } from './materials.js';
 import { CRUDE_CUTS, NE0, PAIR_A, PAIR_PRODUCT, PAIR_RATIO, TAR } from './chemdata.js';
 import { BREAK, DROP, FORM, RISE, swapChance, swapHeat, tbin } from './energy.js';
+import { meltOf } from './alloys.js';
 import { ACID_OF, ACID_X, BASE_METAL, BOIL, CAPS, CARBON, CPDI, ENV, FIRE, GASP, HYD, HYDROXIDE, LF, LV, MELT, METAL, NOCOND, OX, OXIDE_OF, RUST, SOLIDST, TROUT, WATER, stateAt } from './tables.js';
 import { G, LP, Pref, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
 import { P, temp } from './flow.js';
@@ -33,7 +34,7 @@ export function phase(i, t, s) {
   }
   const c = CAPS[t];
   if (s === LIQUID) {
-    const b = boilAt(t, P[i] + LP[i]), m = MELT[t];
+    const b = boilAt(t, P[i] + LP[i]), m = meltOf(i, t);
     if (T > b) {
       if (lat[i] < 0) lat[i] = 0;
       lat[i] += (T - b) * c; temp[i] = b;
@@ -51,7 +52,7 @@ export function phase(i, t, s) {
     }
     return LIQUID;
   }
-  const m = MELT[t];
+  const m = meltOf(i, t);
   if (T > m) {
     lat[i] += (T - m) * c; temp[i] = m;
     if (lat[i] >= LF[t]) { lat[i] = 0; return LIQUID; }

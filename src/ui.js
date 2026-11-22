@@ -3,13 +3,14 @@ import * as planck from 'planck';
 import { AMBIENT, DRAFT, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, POWDER, S, SOL, STATIC, W } from './sim/constants.js';
 import { ID, MATS } from './sim/materials.js';
 import { FIRE, SMOKE, stateAt } from './sim/tables.js';
-import { passPairs, CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, LP, PLUG, PUMP, SENSE_C, SENSE_P, SENSE_T, SWITCH, VALVE, WIRE, bid, bodies, ddir, dset, fan, gate, life, lit, open, ox, st, type } from './sim/grid.js';
+import { passPairs, sx, CONTACT, DEV_DEFAULT, ELECTRODE, G, HEATER, INJECTOR, INVERTER, LP, PLUG, PUMP, SENSE_C, SENSE_P, SENSE_T, SWITCH, VALVE, WIRE, bid, bodies, ddir, dset, fan, gate, life, lit, open, ox, st, type } from './sim/grid.js';
 import { made } from './sim/reactions.js';
 import { nFast, nX, nY } from './sim/neutrons.js';
 import { FX, FY, P, temp } from './sim/flow.js';
 import { bodiesAt, removeBody } from './sim/parts.js';
 import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, removeJoint, setJointKind, setMotor, setSpring, snapPoint, springEnds, ungrab } from './sim/joints.js';
 import { restore, snapshot, step } from './sim/world.js';
+import { massShare, solute } from './sim/alloys.js';
 import { addBody, cellsRect, draft, finishPart, floodRegion, lineCells, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
 
@@ -133,6 +134,11 @@ function render() {
         } else {
           const c = (s === STATIC && m.solidColor) || m.color;
           r = c[0]; g = c[1]; b = c[2];
+          if (sx[i] > 0) {
+            // an alloy takes on some of the colour of what is dissolved in it (carbon darkens iron, zinc yellows copper)
+            const so = solute(i);
+            if (so) { const cs = MATS[so].color, k = Math.min(0.6, sx[i] * 2.5); r += (cs[0] - r) * k; g += (cs[1] - g) * k; b += (cs[2] - b) * k; }
+          }
           if (s === LIQUID) { r += 10; g += 10; b += 10; }
           else { const n = shade[i]; r += n; g += n; b += n; }
           if (s === PART) {
@@ -1161,7 +1167,8 @@ function frame() {
       const fd = fan[i];
       const over = fd >= CONTACT ? devName(i) + (lit[i] >= 4 ? ' (live)' : '') + ' \u00b7 ' : fd && !SOL[st[i]] ? 'Fan \u00b7 ' : '';
       const burnt = st[i] === NONE && ox[i] < 0.95 ? ' (' + Math.round(100 - ox[i] * 100) + '% burnt)' : '';
-      readoutEl.textContent = (G.nCount ? G.nCount + ' neutrons \u00b7 ' : '') + over + label(type[i], st[i]) + burnt + ' · ' + Math.round(temp[i]) + ' °C' + p;
+      const so = solute(i), mix = so ? ' (' + (100 * massShare(i)).toFixed(massShare(i) < 0.1 ? 1 : 0) + '% ' + MATS[so].name.toLowerCase() + ' by mass)' : '';
+      readoutEl.textContent = (G.nCount ? G.nCount + ' neutrons \u00b7 ' : '') + over + label(type[i], st[i]) + mix + burnt + ' · ' + Math.round(temp[i]) + ' °C' + p;
     } else readoutEl.textContent = G.nCount ? G.nCount + ' neutrons' : ' ';
   }
   requestAnimationFrame(frame);
@@ -1288,6 +1295,7 @@ async function openBench(file) {
       if (snap.st[i] === GAS && snap.aux[i] && snap.aux[i] !== NOTHING && snap.type[i] === FIRE) snap.aux[i] = map[snap.aux[i]] || NOTHING;
     }
     for (const b of snap.bodies) b.mat = map[b.mat] || ID.Fe;
+    if (snap.sol) for (let i = 0; i < snap.sol.length; i++) { snap.sol[i] = map[snap.sol[i]] || 0; snap.sh[i] = map[snap.sh[i]] || 0; }
     pushUndo();
     drag = null; down = false; select(null);
     restore(snap);

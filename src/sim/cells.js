@@ -2,7 +2,8 @@
 import { FIRE_P, GAS, H, LIQUID, NONE, NOTHING, POWDER, SOL, STATIC, W } from './constants.js';
 import { MATS } from './materials.js';
 import { CRUDE } from './chemdata.js';
-import { ACID_X, CHEMV, CPDI, DENS, FIRE, IGN, LIFT, RAD, RX, SMOKE, stateAt } from './tables.js';
+import { ACID_X, CHEMV, CPDI, DENS, FIRE, IGN, LIFT, METAL, RAD, RX, SMOKE, stateAt } from './tables.js';
+import { mix } from './alloys.js';
 import { G, aux, clearCell, lat, life, ox, st, stamp, swap, type } from './grid.js';
 import { NB, burn, chemCompound, chemReact, condense, cpdReact, distill, fireTouch, fireTouchLit, phase, pool, react, smolder, wetReact } from './reactions.js';
 import { backflow } from './electrics.js';
@@ -85,6 +86,7 @@ export function updateCell(i, x, y) {
     if (CHEMV[t] && chemReact(i, x, y, t)) return;
     if ((CPDI[t] || ACID_X[t]) && cpdReact(i, x, y, t)) return;
     if (CPDI[t] && chemCompound(i, x, y, t, CPDI[t])) return;
+    if (s === LIQUID && METAL[t]) mix(i, x, y, t);
     const ns = phase(i, t, s);
     if (ns !== s) {
       if (m.vapor && s === LIQUID && ns === GAS) life[i] = m.burn.units - life[i];   // the vapour carries what fuel was left

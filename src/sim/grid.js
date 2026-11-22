@@ -72,6 +72,12 @@ world.on('pre-solve', contact => {
   if (a && b && passPairs.has(pairKey(a, b))) contact.setEnabled(false);
 });
 
+// What is dissolved in a cell (alloys): one material (sol), as a fraction of the cell's atoms (sx). It belongs
+// to the cell's material as it was when it dissolved (sh): if the cell has since become something else, the
+// composition no longer counts (see solute() in alloys.js), so nothing that changes a cell's material has to
+// remember to clear it. taken: how much of a cell's own material has already dissolved into neighbours.
+export const sol = new Uint16Array(N), sx = new Float32Array(N), sh = new Uint16Array(N), taken = new Float32Array(N);
+
 export function swap(i, j) {
   const t = type[i]; type[i] = type[j]; type[j] = t;
   const s = st[i]; st[i] = st[j]; st[j] = s;
@@ -80,6 +86,10 @@ export function swap(i, j) {
   const a = aux[i]; aux[i] = aux[j]; aux[j] = a;
   const q = lat[i]; lat[i] = lat[j]; lat[j] = q;
   const nd = need[i]; need[i] = need[j]; need[j] = nd;
+  const so = sol[i]; sol[i] = sol[j]; sol[j] = so;
+  const sf = sx[i]; sx[i] = sx[j]; sx[j] = sf;
+  const hh = sh[i]; sh[i] = sh[j]; sh[j] = hh;
+  const tk = taken[i]; taken[i] = taken[j]; taken[j] = tk;
   stamp[i] = cur; stamp[j] = cur;
   // Pressure belongs to the square, but the gas in a bubble rising through liquid (or the air a falling drop
   // displaces) must take its pressure with it: liquid holds a tiny fraction of what gas does, so pressure left
@@ -91,7 +101,7 @@ export function swap(i, j) {
   }
 }
 
-export function clearCell(i) { type[i] = 0; st[i] = NONE; life[i] = 0; aux[i] = 0; lat[i] = 0; need[i] = 0; }
+export function clearCell(i) { type[i] = 0; st[i] = NONE; life[i] = 0; aux[i] = 0; lat[i] = 0; need[i] = 0; sx[i] = 0; taken[i] = 0; }
 
 // Melting, freezing, boiling and condensing all take or give energy. A cell that reaches the threshold
 // holds at that temperature and banks the extra heat; only when the bank is full does it change state.

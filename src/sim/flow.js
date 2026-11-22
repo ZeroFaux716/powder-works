@@ -1,10 +1,11 @@
 // Gas pressure and flow, liquids under pressure, heat flow, and moving air carrying heat.
 import { AIR_COOL, AMBIENT, BULK, CAPG, DIFF, FAN_HEAD, FAN_TOP, FLOW_ROUNDS, GAS, H, KAPPA, KEEP_GAS, KEEP_LIQUID, KEEP_POWDER, KFLOW, KLIQ, LIQCAP, LIQUID, N, NONE, NOTHING, P0, POWDER, P_ITERS, SOL, W } from './constants.js';
 import { CAPS, CONDG, CONDS, FIRE } from './tables.js';
-import { G, HDX, HDY, LP, Pref, aux, cnd, cpBuf, cpc, dpBuf, fan, gate, headFaces, kfBuf, lat, life, open, ox, pcap, smooth, st, stamp, stocked, type } from './grid.js';
+import { sx, G, HDX, HDY, LP, Pref, aux, cnd, cpBuf, cpc, dpBuf, fan, gate, headFaces, kfBuf, lat, life, open, ox, pcap, smooth, st, stamp, stocked, type } from './grid.js';
 import { NB } from './reactions.js';
 import { cur, tick } from './world.js';
 import { CSHIFT, CW, awake } from './sleep.js';
+import { conductionFactor } from './alloys.js';
 
 export let temp = new Float32Array(N).fill(AMBIENT);
 export let temp2 = new Float32Array(N);
@@ -357,7 +358,8 @@ export function diffuseHeat() {
     const c = s === NONE || s === GAS ? CAPG : CAPS[t];
     const k = s === GAS ? (t === FIRE && aux[i] === NOTHING ? 0.01 : CONDG[t]) : CONDS[t];
     cpc[i] = c;
-    cnd[i] = k < c / 4.5 ? k : c / 4.5;        // keeps the exchange stable for low-capacity cells
+    const ka = sx[i] > 0 ? k * conductionFactor(i) : k;   // (alloys conduct heat less well)
+    cnd[i] = ka < c / 4.5 ? ka : c / 4.5;        // keeps the exchange stable for low-capacity cells
   }
   for (let y = 1; y < H - 1; y++) {
     let i = y * W + 1;

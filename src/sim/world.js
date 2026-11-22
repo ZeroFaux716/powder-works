@@ -3,7 +3,7 @@ import * as planck from 'planck';
 import { AMBIENT, DRAFT, GAS, H, LIQUID, NONE, P0, PART, POWDER, STATIC, W } from './constants.js';
 import { MATS } from './materials.js';
 import { CHEMV, CPDI, IGN, MELT, PARTRX, RAD, RX } from './tables.js';
-import { G, LP, Pref, aux, passPairs, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, lit, ox, st, stamp, type, world } from './grid.js';
+import { G, LP, Pref, aux, passPairs, sol, sx, sh, taken, bid, bodies, clearCell, ddir, dset, fan, gate, lat, life, lit, ox, st, stamp, type, world } from './grid.js';
 import { burn, chemCompound, chemReact, cpdReact, detach, need, phase, react, smolder, wetReact } from './reactions.js';
 import { electric } from './electrics.js';
 import { nDX, nDY, nFast, nLife, nX, nY, radiate, stepNeutrons } from './neutrons.js';
@@ -11,13 +11,14 @@ import { updateCell } from './cells.js';
 import { FX, FY, P, advectAir, diffuseHeat, diffusePressure, liquidPressure, temp } from './flow.js';
 import { physicsStep, rebuildGround, spawn } from './parts.js';
 import { scanChunks, wakeAll } from './sleep.js';
+import { meltOf } from './alloys.js';
 import { buildJoint, jrecs } from './joints.js';
 
 export let tick = 0, cur = 1;
 // ---------- snapshots for Play and Rewind ----------
 export function snapshot() {
   return {
-    fan: fan.slice(), dset: dset.slice(), gate: gate.slice(), ddir: ddir.slice(), fx: FX.slice(), fy: FY.slice(), type: type.slice(), st: st.slice(), temp: temp.slice(), life: life.slice(), aux: aux.slice(), lat: lat.slice(), need: need.slice(), ox: ox.slice(), P: P.slice(), bid: bid.slice(), nextId: G.nextId,
+    fan: fan.slice(), dset: dset.slice(), gate: gate.slice(), ddir: ddir.slice(), fx: FX.slice(), fy: FY.slice(), type: type.slice(), st: st.slice(), temp: temp.slice(), life: life.slice(), aux: aux.slice(), lat: lat.slice(), need: need.slice(), sol: sol.slice(), sx: sx.slice(), sh: sh.slice(), taken: taken.slice(), ox: ox.slice(), P: P.slice(), bid: bid.slice(), nextId: G.nextId,
     neutrons: { n: G.nCount, x: nX.slice(0, G.nCount), y: nY.slice(0, G.nCount), dx: nDX.slice(0, G.nCount), dy: nDY.slice(0, G.nCount), fast: nFast.slice(0, G.nCount), life: nLife.slice(0, G.nCount) },
     bodies: Array.from(bodies.values(), rb => {
       const p = rb.b.getPosition(), v = rb.b.getLinearVelocity();
@@ -37,7 +38,9 @@ export function snapshot() {
 
 export function restore(snap) {
   clearAll();
-  type.set(snap.type); st.set(snap.st); temp.set(snap.temp); life.set(snap.life); aux.set(snap.aux); lat.set(snap.lat); need.set(snap.need); ox.set(snap.ox); P.set(snap.P); Pref.set(snap.P); bid.set(snap.bid);
+  type.set(snap.type); st.set(snap.st); temp.set(snap.temp); life.set(snap.life); aux.set(snap.aux); lat.set(snap.lat); need.set(snap.need);
+  // (saves from before 0.9 have no compositions)
+  if (snap.sx) { sol.set(snap.sol); sx.set(snap.sx); sh.set(snap.sh); taken.set(snap.taken); } else { sx.fill(0); taken.fill(0); } ox.set(snap.ox); P.set(snap.P); Pref.set(snap.P); bid.set(snap.bid);
   fan.set(snap.fan); dset.set(snap.dset); gate.set(snap.gate); ddir.set(snap.ddir); FX.set(snap.fx); FY.set(snap.fy);
   G.nextId = snap.nextId;
   const sn = snap.neutrons;
@@ -99,7 +102,7 @@ export function step() {
         if (RAD[t] && radiate(i, x, y, t, STATIC)) continue;
         const T = temp[i];
         if (T > IGN[t]) { const m = MATS[t]; if (m.burn.fast) burn(i); else smolder(i, x, y, m); }
-        else if (T > MELT[t] || lat[i] > 0) { if (phase(i, t, STATIC) !== STATIC) { st[i] = LIQUID; G.groundDirty = true; } }
+        else if (T > meltOf(i, t) || lat[i] > 0) { if (phase(i, t, STATIC) !== STATIC) { st[i] = LIQUID; G.groundDirty = true; } }
         else if (RX[t] && react(i, x, y, t, STATIC)) continue;
         else if (CHEMV[t]) chemReact(i, x, y, t);
         else if (CPDI[t]) { if (!cpdReact(i, x, y, t)) chemCompound(i, x, y, t, CPDI[t]); }
@@ -126,6 +129,7 @@ export function clearAll() {
   bodies.clear();
   jrecs.length = 0;
   passPairs.clear();
+  sx.fill(0); taken.fill(0);
   wakeAll();
   G.nCount = 0;
   LP.fill(0); G.lpCells = []; lit.fill(0);
