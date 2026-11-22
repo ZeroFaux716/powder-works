@@ -2,6 +2,7 @@
 import { CAPG, DRAFT, FLAME_GAIN, GAS, H, LIQUID, N, NONE, NOTHING, P0, PART, SOL, STATIC, W } from './constants.js';
 import { ID, MATS } from './materials.js';
 import { CRUDE_CUTS, NE0, PAIR_A, PAIR_ACT, PAIR_HEAT, PAIR_PRODUCT, PAIR_RATE, PAIR_RATIO, TAR } from './chemdata.js';
+import { BREAK, DROP, FORM, RISE, tbin } from './energy.js';
 import { ACID_OF, ACID_X, BASE_METAL, BOIL, CAPS, CARBON, CPDI, ENV, FIRE, GASP, HYD, HYDROXIDE, LF, LV, MELT, METAL, NOCOND, OX, OXIDE_OF, RUST, SOLIDST, TROUT, WATER, stateAt } from './tables.js';
 import { G, LP, Pref, aux, bid, bodies, clearCell, lat, life, lit, open, ox, st, stamp, type } from './grid.js';
 import { P, temp } from './flow.js';
@@ -223,7 +224,7 @@ export function chemReact(i, x, y, t) {
     const ia = PAIR_A[pk], ib = ia === t ? tn : t;
     if (chemSkip(ia, ib)) continue;
     const T = temp[i] > temp[n] ? temp[i] : temp[n];
-    if (T < PAIR_ACT[pk] || Math.random() > PAIR_RATE[pk]) continue;
+    if (!(Math.random() < formChance(pk, pid, T))) continue;
     return combine(i, n, t, tn, pk, pid, ia);
   }
   // gases are thin: a gas reacts with a partner a couple of cells away as well
@@ -238,19 +239,28 @@ export function chemReact(i, x, y, t) {
         if (pid) {
           const ia = PAIR_A[pk], ib = ia === t ? tn : t;
           const T = Math.max(temp[i], temp[n], temp[mid]);   // the air between them counts: a flame front heats it
-          if (!chemSkip(ia, ib) && T >= PAIR_ACT[pk] && Math.random() < PAIR_RATE[pk]) return combine(i, n, t, tn, pk, pid, ia);
+          if (!chemSkip(ia, ib) && Math.random() < formChance(pk, pid, T)) return combine(i, n, t, tn, pk, pid, ia);
         }
       }
     }
   }
   return false;
 }
+// How likely two elements meeting at temperature T are to combine this frame: from the energy tables (only if
+// it lowers the Gibbs energy, at the Arrhenius rate), or the old hand-set numbers for a compound without them.
+export function formChance(pk, pid, T) {
+  const f = FORM[pid];
+  if (f) return f[tbin(T)];
+  return T < PAIR_ACT[pk] ? 0 : PAIR_RATE[pk];
+}
+// the temperature rise of forming it, per atom-sized cell taking part
+const riseAt = (pk, pid, T) => RISE[pid] ? RISE[pid][tbin(T)] : PAIR_HEAT[pk];
 export function combine(i, n, t, tn, pk, pid, ia) {
   // the compound forms in the place of the element it has more atoms of; the other cell is used up
-  const r = PAIR_RATIO[pk], heat = PAIR_HEAT[pk];
+  const r = PAIR_RATIO[pk];
   const cA = ia === t ? i : n, cB = ia === t ? n : i;
   const keep = r >= 1 ? cA : cB, gone = keep === cA ? cB : cA;
-  const T0 = Math.max(temp[cA], temp[cB]);
+  const T0 = Math.max(temp[cA], temp[cB]), heat = riseAt(pk, pid, T0);
   useUp(gone);
   becomeCompound(keep, pid, T0, heat);
   need[keep] = r >= 1 ? r - 1 : -(1 / r - 1);
@@ -326,9 +336,11 @@ export function cpdReact(i, x, y, t) {
 }
 // A compound short of one of its elements takes it in from a neighbour, and an unstable one falls apart when hot.
 export function chemCompound(i, x, y, t, info) {
-  if (temp[i] > info.dec && Math.random() < 0.05) {
-    // back to its elements: this cell becomes the giver, and a free neighbour takes the other one if there is room
-    const T = temp[i];
+  const brk = BREAK[t];
+  if (brk ? Math.random() < brk[tbin(temp[i])] : temp[i] > info.dec && Math.random() < 0.05) {
+    // back to its elements: this cell becomes the giver, and a free neighbour takes the other one if there is
+    // room; falling apart takes back the heat that forming it gave off
+    const T = brk ? Math.max(-200, temp[i] - DROP[t][tbin(temp[i])]) : temp[i];
     type[i] = info.A; life[i] = 0; aux[i] = 0; lat[i] = 0; need[i] = 0;
     st[i] = stateAt(MATS[info.A], T); stamp[i] = cur;
     for (let k = 0; k < 4; k++) {
@@ -346,7 +358,7 @@ export function chemCompound(i, x, y, t, info) {
     const n = i + NB[k];
     if (type[n] !== want || st[n] === NONE || st[n] === DRAFT || stamp[n] === cur) continue;
     useUp(n);
-    temp[i] += info.heat * 0.5;
+    temp[i] += RISE[t] ? RISE[t][tbin(temp[i])] : info.heat * 0.5;
     const left = nd > 0 ? nd - 1 : nd + 1;
     need[i] = (nd > 0 ? left > 0.01 : left < -0.01) ? left : 0;
     if (st[i] !== PART) st[i] = stateAt(MATS[t], temp[i]);
