@@ -91,3 +91,13 @@ test('aluminium and iron oxide give off a great deal of heat (thermite)', () => 
   const c = tally(62, 62, 179, 119);
   assert.ok((c.cpd_Al2O3 || 0) > 100 && hot > 1500, `alumina ${c.cpd_Al2O3 || 0}, hottest ${hot.toFixed(0)} °C`);
 });
+
+test('hot iron takes the oxygen out of steam and sets hydrogen free; copper does not', () => {
+  // (iron, steam and hydrogen are nearly balanced: below about 550 °C steam rusts iron, above it hydrogen turns
+  // rust back into iron, as in the real steam-iron process)
+  const fe = cook('Fe', 'water', 450, 3), cu = cook('Cu', 'water', 450, 3);
+  assert.ok((fe.rust || 0) > 20 && (fe.H || 0) > 20, `iron in steam at 450 °C: rust ${fe.rust || 0}, hydrogen ${fe.H || 0}`);
+  assert.equal(cu.cpd_CuO || 0, 0, 'copper oxide made from steam');
+  const cold = cook('Fe', 'water', 60, 3);
+  assert.ok((cold.H || 0) < 5, `iron in warm water makes next to no hydrogen: ${cold.H || 0}`);
+});

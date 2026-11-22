@@ -307,13 +307,15 @@ export function cpdReact(i, x, y, t) {
     if (!info) return false;
     // a hydrogen halide dissolves in water to make the acid
     if (ACID_OF[t] && tn === WATER && sn === LIQUID) { swapTo(n, ACID_OF[t], temp[n] + 40); useUp(i); return true; }
-    if (t === WATER || tn >= NE0 || isNaN(ENV[tn])) continue;
+    if (tn >= NE0 || isNaN(ENV[tn])) continue;
+    if (t === WATER && MATS[tn].wet) continue;      // (sodium and the like fizzing in water have their own rule)
     const A = info.A, B = info.B;
-    // compounds of hydrogen (water, the hydrogen halides) are left to the water and acid rules
-    if (A === HYD || tn === A || tn === B) continue;
+    // other compounds of hydrogen (the hydrogen halides) are left to the acid rules; water takes part, so hot
+    // iron, zinc or carbon take the oxygen out of steam and set the hydrogen free, and fluorine frees oxygen
+    if ((A === HYD && t !== WATER) || tn === A || tn === B) continue;
     // Swapping partners, by energy: the element takes over this compound's electron-taker (carbon smelting
     // iron oxide, aluminium in thermite, zinc taking chlorine from copper chloride, hydrogen stripping copper
-    // oxide), or its electron-giver (chlorine driving bromine out of a bromide, oxygen roasting a sulfide),
+    // oxide, iron in hot steam), or its electron-giver (chlorine driving bromine out of a bromide, oxygen roasting a sulfide),
     // when the compound it would make holds that element more tightly, per atom, than this one does.
     let to = 0, side = '', freed = 0;
     const kB = tn * NE0 + B, kA = A * NE0 + tn;
