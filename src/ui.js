@@ -10,7 +10,7 @@ import { FX, FY, P, temp } from './sim/flow.js';
 import { bodiesAt, removeBody } from './sim/parts.js';
 import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, removeJoint, setJointKind, setMotor, setSpring, snapPoint, springEnds, ungrab } from './sim/joints.js';
 import { restore, snapshot, step } from './sim/world.js';
-import { addBody, cellsRect, draft, finishPart, makePart, paint, passedLast } from './sim/editing.js';
+import { addBody, cellsRect, draft, finishPart, floodRegion, lineCells, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
 
 // ---------- rendering and input ----------
@@ -66,6 +66,9 @@ const TOOL_HINTS = {
 
 let tool = 'fire', view = 0, playing = false, brush = 3, preset = 'engine', curMat = ID.sand;
 let down = false, lastX = -1, lastY = -1, hoverX = -1, hoverY = -1, hoverFX = -1, hoverFY = -1, dragX = 0, dragY = 0;
+// Powder Toy's drawing keys: Shift-drag a line, Ctrl-drag (Cmd on a Mac) a filled rectangle, with Alt held
+// the line snaps to 45° steps and the rectangle to a square; Ctrl+Shift-click fills an area.
+let shape = null, altHeld = false, altUsed = false;
 let drag = null, sel = null, snap = null, fanDir = 1;
 
 function label(t, s) {
@@ -304,6 +307,28 @@ function drawOverlay() {
       octx.strokeStyle = chosen ? SEL : JCOL.motor;
       octx.lineWidth = 2;
       octx.stroke();
+    }
+  }
+  if (down && shape) {
+    // the line or rectangle about to be drawn
+    const [x1, y1] = shapeEnd();
+    octx.fillStyle = 'rgba(232,238,245,0.35)';
+    octx.strokeStyle = '#e8eef5';
+    if (shape.kind === 'rect') {
+      const x0 = Math.min(shape.x0, x1), y0 = Math.min(shape.y0, y1);
+      const w = (Math.abs(x1 - shape.x0) + 1) * OS, h = (Math.abs(y1 - shape.y0) + 1) * OS;
+      octx.lineWidth = 1.5;
+      octx.fillRect(x0 * OS, y0 * OS, w, h);
+      octx.strokeRect(x0 * OS, y0 * OS, w, h);
+    } else {
+      octx.beginPath();
+      octx.moveTo((shape.x0 + 0.5) * OS, (shape.y0 + 0.5) * OS);
+      octx.lineTo((x1 + 0.5) * OS, (y1 + 0.5) * OS);
+      octx.lineCap = 'round';
+      octx.lineWidth = Math.max(1, 2 * brush - 1) * OS;
+      octx.strokeStyle = 'rgba(232,238,245,0.45)';
+      octx.stroke();
+      octx.lineCap = 'butt';
     }
   }
   if (down && tool === 'block') {
@@ -855,7 +880,14 @@ canvas.addEventListener('pointerdown', ev => {
       down = false; return;
     }
     startMove(rb, fx, fy);
-  } else if (BRUSHED[tool]) dab(x, y);
+  } else if (BRUSHED[tool]) {
+    const ctrl = ev.ctrlKey || ev.metaKey;
+    altHeld = ev.altKey;
+    if (ctrl && ev.shiftKey) { floodFill(x, y); down = false; }
+    else if (ev.shiftKey) shape = { kind: 'line', x0: x, y0: y, x1: x, y1: y };
+    else if (ctrl) shape = { kind: 'rect', x0: x, y0: y, x1: x, y1: y };
+    else dab(x, y);
+  }
 });
 
 canvas.addEventListener('pointermove', ev => {
@@ -871,13 +903,58 @@ canvas.addEventListener('pointermove', ev => {
     if (dx !== drag.dx || dy !== drag.dy) {
       if (movePart(drag.rb, drag.px + dx * S, drag.py + dy * S, drag.rb.b.getAngle())) { drag.dx = dx; drag.dy = dy; }
     }
-  } else if (BRUSHED[tool]) stroke(lastX, lastY, x, y);
+  } else if (shape) { shape.x1 = x; shape.y1 = y; altHeld = ev.altKey; }
+  else if (BRUSHED[tool]) stroke(lastX, lastY, x, y);
   lastX = x; lastY = y;
 });
+
+// Where the line or rectangle ends, snapped as Powder Toy does (GameView::lineSnapCoords and rectSnapCoords)
+// while Alt is held: lines to horizontal, vertical or 45°, rectangles to squares.
+function shapeEnd() {
+  const { x0, y0, x1, y1 } = shape, dx = x1 - x0, dy = y1 - y0;
+  if (!altHeld) return [x1, y1];
+  altUsed = true;
+  if (shape.kind === 'line') {
+    if (Math.abs(dx) > 2 * Math.abs(dy)) return [x1, y0];
+    if (Math.abs(dy) > 2 * Math.abs(dx)) return [x0, y1];
+  }
+  const d = Math.round(dx * dy > 0 ? (dx + dy) / 2 : (dx - dy) / 2);
+  return dx * dy > 0 ? [x0 + d, y0 + d] : [x0 + d, y0 - d];
+}
+// The squares a line (stamped with the brush all along it) or a rectangle covers, each once
+function shapeCells() {
+  const [x1, y1] = shapeEnd(), out = new Set();
+  const add = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) out.add(y * W + x); };
+  if (shape.kind === 'rect') {
+    for (let y = Math.min(shape.y0, y1); y <= Math.max(shape.y0, y1); y++)
+      for (let x = Math.min(shape.x0, x1); x <= Math.max(shape.x0, x1); x++) add(x, y);
+  } else {
+    const r = brush - 1;
+    for (const [cx, cy] of lineCells(shape.x0, shape.y0, x1, y1))
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r + 0.5) add(cx + dx, cy + dy);
+  }
+  return out;
+}
+const toolMat = () => tool === 'part' ? partMat() : tool === 'fan' ? fanDir : curMat;
+function paintCells(cells) { const m = toolMat(); for (const i of cells) paint(i % W, (i / W) | 0, tool, 0, m, true); }
+function applyShape() { paintCells(shapeCells()); }
+function floodFill(x, y) {
+  const cells = floodRegion(x, y);
+  if (!cells.length) { setHint('Fill works on empty space or loose material, not on a part.'); return; }
+  paintCells(cells);
+  if (tool === 'part') {
+    const n = finishPart();
+    if (n) setHint((n === 1 ? 'Part made' : n + ' parts made') + passNote() + '. Join parts with Hinge.');
+  } else setHint('Filled ' + cells.length + ' squares.');
+}
+// Holding Alt only snaps; stop a lone Alt press from sending the browser to its menu bar after drawing.
+window.addEventListener('keydown', ev => { if (ev.key === 'Alt') { altHeld = true; if (shape) ev.preventDefault(); } });
+window.addEventListener('keyup', ev => { if (ev.key === 'Alt') { altHeld = false; if (shape || altUsed) ev.preventDefault(); altUsed = false; } });
 
 function release() {
   if (!down) return;
   down = false;
+  if (shape) { applyShape(); shape = null; }
   if (drag && drag.mode === 'spring') {
     const end = snapPoint(drag.cx, drag.cy);
     if (Math.hypot(end.x - drag.x, end.y - drag.y) < 1.5) setHint('Drag further: a spring needs some length.');
@@ -903,6 +980,7 @@ function release() {
   drag = null;
 }
 canvas.addEventListener('pointerup', release);
+canvas.addEventListener('contextmenu', ev => ev.preventDefault());   // Ctrl-click on a Mac is a right click
 canvas.addEventListener('pointercancel', release);
 canvas.addEventListener('pointerleave', () => { hoverX = -1; snap = null; });
 canvas.addEventListener('wheel', ev => {
@@ -914,7 +992,7 @@ canvas.addEventListener('wheel', ev => {
 // ---------- tools, play and rewind ----------
 const passNote = () => passedLast ? ' (it passes through the ' + (passedLast === 1 ? 'part' : passedLast + ' parts') + ' it was drawn over)' : '';
 function toolHint(name) {
-  if (name === 'brush') return 'Painting ' + label(curMat, stateAt(MATS[curMat], AMBIENT)).toLowerCase() + '. Press T for the full table of materials.';
+  if (name === 'brush') return 'Painting ' + label(curMat, stateAt(MATS[curMat], AMBIENT)).toLowerCase() + '. Shift-drag: line (Alt snaps), Ctrl-drag: box, Ctrl+Shift-click: fill. T: all materials.';
   if (name === 'part' || name === 'block') {
     const made = MATS[partMat()].name.toLowerCase();
     const why = partMat() === curMat ? '' : ' (' + MATS[curMat].name + ' is not a solid block, so parts use iron)';
@@ -1016,7 +1094,7 @@ versionEl.title = __COMMIT__ === 'dev' ? 'Running from the dev server' : 'Built 
 
 let frameNo = 0;
 function frame() {
-  if (down && BRUSHED[tool] && tool !== 'part') dab(lastX, lastY);
+  if (down && BRUSHED[tool] && tool !== 'part' && !shape) dab(lastX, lastY);
   if (playing) step();
   if (sel && ((sel.rb && !bodies.has(sel.rb.id)) || (sel.rec && !jrecs.includes(sel.rec)) || (sel.dev && fan[sel.cells[0]] !== sel.dev))) select(null);
   snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapPoint(hoverFX, hoverFY) : null;

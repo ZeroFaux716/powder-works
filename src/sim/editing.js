@@ -103,10 +103,53 @@ export function finishPart() {
   return made;
 }
 
+// The squares of a straight line, as Powder Toy draws them (Simulation::CreateLine): one step along the
+// longer axis at a time, plus an extra square wherever it steps sideways, so even a thin diagonal line has
+// no gaps for gas or liquid to slip through.
+export function lineCells(x1, y1, x2, y2) {
+  const out = [];
+  const steep = Math.abs(y2 - y1) > Math.abs(x2 - x1);
+  if (steep) { [x1, y1] = [y1, x1]; [x2, y2] = [y2, x2]; }
+  if (x1 > x2) { [x1, x2] = [x2, x1]; [y1, y2] = [y2, y1]; }
+  const dx = x2 - x1, dy = Math.abs(y2 - y1), sy = y1 < y2 ? 1 : -1, de = dx ? dy / dx : 0;
+  const put = (a, b) => out.push(steep ? [b, a] : [a, b]);
+  let e = 0, y = y1;
+  for (let x = x1; x <= x2; x++) {
+    put(x, y);
+    e += de;
+    if (e >= 0.5) {
+      y += sy;
+      if (sy > 0 ? y <= y2 : y >= y2) put(x, y);
+      e -= 1;
+    }
+  }
+  return out;
+}
+
+// The connected area that a fill starting at (x, y) covers: every square joined to it (side by side, not
+// corner to corner) holding the same thing, such as one stretch of empty space or one pool of water.
+// Parts and anything different bound it.
+export function floodRegion(x, y, limit = N) {
+  const i0 = y * W + x, s0 = st[i0], t0 = s0 === NONE ? 0 : type[i0];
+  if (s0 === PART) return [];
+  const seen = new Uint8Array(N), out = [i0];
+  seen[i0] = 1;
+  for (let h = 0; h < out.length && out.length < limit; h++) {
+    const i = out[h], cx = i % W;
+    for (const j of [cx > 0 ? i - 1 : -1, cx < W - 1 ? i + 1 : -1, i - W, i + W]) {
+      if (j < 0 || j >= N || seen[j]) continue;
+      seen[j] = 1;
+      if (st[j] === s0 && (s0 === NONE || type[j] === t0)) out.push(j);
+    }
+  }
+  return out;
+}
+
 // tool: 'brush' paints matId, 'part' drafts a part of matId, plus 'fire', 'heat', 'cool', 'erase'.
+// solid: fill every square (lines, rectangles and fills) instead of the brush's loose scatter of liquid and gas.
 export const DEV_TOOLS = { contact: CONTACT, wire: WIRE, plug: PLUG, injector: INJECTOR, valve: VALVE, switch: SWITCH, heater: HEATER, sensor: SENSE_T, inverter: INVERTER, pump: PUMP, electrode: ELECTRODE };
 // for the device tools matId carries the new device's setting (left out: the usual default)
-export function paint(cx, cy, tool, r, matId) {
+export function paint(cx, cy, tool, r, matId, solid) {
   const m = matId !== undefined && tool !== 'fan' && !DEV_TOOLS[tool] ? MATS[matId] : null;
   const ms = m ? stateAt(m, AMBIENT) : NONE;
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -154,7 +197,7 @@ export function paint(cx, cy, tool, r, matId) {
       if (s !== STATIC && !draft[i]) { draft[i] = m.id; strokeCells.push(i); }
     } else if (ms === STATIC) {
       if (!SOL[s]) { type[i] = m.id; st[i] = STATIC; life[i] = 0; aux[i] = 0; lat[i] = 0; temp[i] = AMBIENT; P[i] = P0; G.groundDirty = true; }
-    } else if (s === NONE && Math.random() < (ms === GAS ? 0.6 : 0.8)) {
+    } else if (s === NONE && (solid || Math.random() < (ms === GAS ? 0.6 : 0.8))) {
       type[i] = m.id; st[i] = ms; temp[i] = AMBIENT; life[i] = 0; aux[i] = 0; lat[i] = 0;
     }
   }

@@ -68,3 +68,17 @@ test('a block hangs on a spring, and Rewind brings back the spring as it was', (
   run(60);
   assert.ok(Math.abs(y() - hung) < 3, 'and stays there after the rewind');
 });
+
+test('Shift lines have no gaps, and a fill stays inside its walls', () => {
+  // every square of a line touches the next one side by side, at any angle (as in Powder Toy)
+  for (const [x1, y1] of [[40, 3], [17, 29], [-25, 31], [-40, -7], [5, -40]]) {
+    const pts = Sim.lineCells(100, 70, 100 + x1, 70 + y1);
+    for (let k = 1; k < pts.length; k++) {
+      const d = Math.abs(pts[k][0] - pts[k - 1][0]) + Math.abs(pts[k][1] - pts[k - 1][1]);
+      assert.equal(d, 1, `line to (${x1}, ${y1}) jumps diagonally at square ${k}`);
+    }
+  }
+  Sim.loadPreset('blank');
+  for (const [a, b, c, d] of [[50, 50, 80, 50], [80, 50, 80, 70], [80, 70, 50, 70], [50, 70, 50, 50]]) for (const [x, y] of Sim.lineCells(a, b, c, d)) Sim.paint(x, y, 'brush', 0, ID.wall, true);
+  assert.equal(Sim.floodRegion(60, 60).length, 29 * 19, 'the fill covers exactly the inside of the box');
+});

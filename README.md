@@ -14,6 +14,8 @@ hinges, motors, sliders and springs.
 - Circuits: contacts, wire, switches, sensors, inverters, spark plugs, injectors, valves, heaters, pumps, electrodes
 - Scenes: a two-stroke engine, an oil refinery, a chemistry bench, a reactor and more
 - Undo/redo, save/open, five views (materials, pressure, heat, flow, burnt gas)
+- Powder Toy's drawing keys: Shift-drag a line, Ctrl-drag (Cmd on a Mac) a filled box, Alt snaps them to 45° and
+  squares, Ctrl+Shift-click fills an area. They work with every painting tool, including Part
 
 Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
 
