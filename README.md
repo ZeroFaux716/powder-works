@@ -54,6 +54,9 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
 - `tests/explore/`: the older scripts that print measurements rather than pass or fail, handy when tuning
   (`node tests/explore/test15.js` prints the engine's rpm, firings and fuel every 2 s)
 - `tools/`: generators for the element and chemistry data tables (from Periodic-Table-JSON)
+  - `gen_strength.py`: how strong each element is, into `src/sim/strength.gen.js`, from pymatgen's element data:
+    hardness / 3 (Tabor's relation) for strength, bulk / shear modulus (Pugh's ratio) for brittleness, the melting
+    point for elements without data. `tools/strength-report.md` lists sources, corrections and set-by-hand values.
   - `gen_thermo.py`: energy data (enthalpy and Gibbs energy against temperature) for every chemical material,
     into `src/sim/thermo.gen.js`, from NASA's thermodynamic tables (TM-4513, via Cantera's `data/` folder),
     textbook values, and estimates fitted to the real values. `tools/thermo-report.md` says where each number
