@@ -34,6 +34,9 @@ export function buildJoint(rec, anchor, anchorB) {
   const other = rec.B ? rec.B.b : (rec.anchorBody = world.createBody({ type: 'static', position: anchor }));
   if (rec.kind === 'slider') {
     rec.j = world.createJoint(planck.PrismaticJoint({ collideConnected: false }, other, rec.A.b, anchor, rec.axis));
+  } else if (rec.kind === 'weld') {
+    // a weld locks two parts (or a part and the background) together at their angle when it was made
+    rec.j = world.createJoint(planck.WeldJoint({ collideConnected: false }, rec.A.b, other, anchor));
   } else {
     rec.j = world.createJoint(planck.RevoluteJoint({
       collideConnected: false, enableMotor: rec.kind === 'motor',
@@ -62,7 +65,13 @@ export function removeJoint(rec) {
 }
 
 export function setJointKind(rec, kind) {
-  if (rec.kind === 'slider' || kind === 'slider' || rec.kind === 'spring' || kind === 'spring') return;
+  if (rec.kind === 'slider' || kind === 'slider' || rec.kind === 'spring' || kind === 'spring' || rec.kind === kind) return;
+  if (kind === 'weld' || rec.kind === 'weld') {
+    // a different joint altogether: rebuild it where it is
+    const anchor = rec.A.b.getWorldPoint(rec.localA);
+    dropJoint(rec); rec.kind = kind; buildJoint(rec, anchor);
+    return;
+  }
   rec.kind = kind;
   rec.j.enableMotor(kind === 'motor');
   rec.j.setMotorSpeed(-rec.spin);

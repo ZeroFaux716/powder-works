@@ -60,23 +60,23 @@ export const partStrength = rb => flowStress(rb.mat, rb.sol, rb.sx);
 // machine a lead rod tears out, tin is borderline, and copper, iron and steel hold easily.
 export let LOAD_SCALE = 2.5;
 export const setLoadScale = k => { LOAD_SCALE = k; };
-const PIN_R = 2;
+const PIN_R = 2, WELD_R = 3;      // cells of a part a pin bears on; a weld bead is wider
 
 // the cells of part rb within reach of a pin at local point p, and their mean temperature
-function pinCells(rb, p) {
+function pinCells(rb, p, R = PIN_R) {
   const cx = p.x / S - rb.ox, cy = p.y / S - rb.oy;
   let n = 0, t = 0;
-  for (let y = Math.floor(cy - PIN_R); y <= Math.ceil(cy + PIN_R); y++) for (let x = Math.floor(cx - PIN_R); x <= Math.ceil(cx + PIN_R); x++) {
+  for (let y = Math.floor(cy - R); y <= Math.ceil(cy + R); y++) for (let x = Math.floor(cx - R); x <= Math.ceil(cx + R); x++) {
     if (x < 0 || y < 0 || x >= rb.w || y >= rb.h) continue;
     const k = y * rb.w + x;
-    if (!rb.occ[k] || (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 > PIN_R * PIN_R) continue;
+    if (!rb.occ[k] || (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 > R * R) continue;
     n++; t += rb.temps[k];
   }
   return { n, T: n ? t / n : 20 };
 }
 // how much force the pin at local point p of part rb can take
-export function pinCapacity(rb, p) {
-  const { n, T } = pinCells(rb, p);
+export function pinCapacity(rb, p, R) {
+  const { n, T } = pinCells(rb, p, R);
   return partStrength(rb) * heatFactor(rb.mat, T) * Math.max(n, 1) * LOAD_SCALE;   // (a pin always has something to bear on)
 }
 
@@ -139,9 +139,13 @@ export function checkJoints() {
   crackOnImpact();
   for (const rec of jrecs.slice()) {
     if (!rec.j) continue;
-    const f = rec.j.getReactionForce(1 / DT), F = Math.hypot(f.x, f.y);
+    const f = rec.j.getReactionForce(1 / DT);
+    // a weld also resists bending: its twisting load counts as a pull at the edge of the weld
+    let F = Math.hypot(f.x, f.y);
+    if (rec.kind === 'weld') F += Math.abs(rec.j.getReactionTorque(1 / DT)) / (WELD_R * S);
     rec.load = rec.load === undefined ? F : rec.load * 0.7 + F * 0.3;      // (smoothed: one jolt is not a pull)
-    const capA = pinCapacity(rec.A, rec.localA), capB = rec.B ? pinCapacity(rec.B, rec.localB) : Infinity;
+    const r = rec.kind === 'weld' ? WELD_R : PIN_R;
+    const capA = pinCapacity(rec.A, rec.localA, r), capB = rec.B ? pinCapacity(rec.B, rec.localB, r) : Infinity;
     rec.cap = Math.min(capA, capB);
     if (!(rec.load > rec.cap)) continue;
     const rb = capA <= capB ? rec.A : rec.B, local = rb === rec.A ? rec.localA : rec.localB;

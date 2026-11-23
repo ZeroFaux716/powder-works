@@ -27,7 +27,7 @@ const px = img.data;
 const shade = new Int8Array(N);
 for (let i = 0; i < N; i++) shade[i] = (Math.random() * 16 | 0) - 8;
 const BG = MATS[0].color;
-const JCOL = { hinge: '#f5d76e', motor: '#6ee0f5', slider: '#f29bd0', spring: '#9be37a' };
+const JCOL = { hinge: '#f5d76e', motor: '#6ee0f5', slider: '#f29bd0', spring: '#9be37a', weld: '#f08a5d' };
 const SEL = '#f2a33a';
 const HINTS = {
   components: 'Press Play. A pump fills the high tank until the water touches a sensor; electrodes split water (switch on); a heat sensor keeps a pot at 90 °C; a spring relief valve vents a heated chamber (switch on).',
@@ -59,6 +59,7 @@ const TOOL_HINTS = {
   move: 'Drag a part to move it. Q and E or the mouse wheel turn it. Click a joint to edit it.',
   hinge: 'Click where two parts meet to pin them, or on one part to pin it to the background. Snaps to centres and joints.',
   motor: 'Click a part to drive it around that point. Click an existing joint to edit it.',
+  weld: 'Click where two parts meet to fix them together, or on one part to fix it to the background. They stay at the angle they are now.',
   slider: 'Press on a part and drag along the direction it should travel. A short click uses its long side.',
   spring: 'Press on a part and drag to where the other end goes: another part, or empty background. Click its middle with Move to set stiffness and length.',
   sensor: 'Paint a sensor and wire it up. It powers its circuit while it is past its setting: heat (150 °C to start), pressure or touch. Click it with Move to change it.',
@@ -407,7 +408,8 @@ function jointColor(rec, base) {
 }
 function jointSub(rec) {
   const what = rec.kind === 'spring' ? (rec.B ? 'Joins two parts' : 'Hangs a part from the background')
-    : rec.kind === 'slider' ? 'Part slides along a fixed track' : rec.B ? 'Joins two parts' : 'Pins a part to the background';
+    : rec.kind === 'slider' ? 'Part slides along a fixed track' : rec.kind === 'weld' ? (rec.B ? 'Fixes two parts together' : 'Fixes a part to the background')
+    : rec.B ? 'Joins two parts' : 'Pins a part to the background';
   const l = loadText(rec);
   return l ? what + ' · ' + l : what;
 }
@@ -441,6 +443,14 @@ function drawOverlay() {
       octx.lineWidth = 2.5;
       octx.strokeStyle = chosen ? SEL : jointColor(rec, JCOL.slider);
       octx.strokeRect(x * OS - 5, y * OS - 5, 10, 10);
+      continue;
+    }
+    if (rec.kind === 'weld') {
+      octx.beginPath();
+      octx.moveTo(x * OS, y * OS - 6); octx.lineTo(x * OS + 6, y * OS); octx.lineTo(x * OS, y * OS + 6); octx.lineTo(x * OS - 6, y * OS); octx.closePath();
+      octx.fillStyle = '#0b0f14'; octx.fill();
+      octx.lineWidth = 2.5; octx.strokeStyle = chosen ? SEL : jointColor(rec, JCOL.weld); octx.stroke();
+      if (chosen) ring(x, y, 10, SEL, 1.5);
       continue;
     }
     octx.beginPath();
@@ -503,7 +513,7 @@ function drawOverlay() {
     octx.stroke();
     octx.setLineDash([]);
   }
-  if (!down && snap && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring')) {
+  if (!down && snap && (tool === 'hinge' || tool === 'motor' || tool === 'weld' || tool === 'slider' || tool === 'spring')) {
     if (snap.joint) ring(snap.x, snap.y, 10, SEL, 1.5, true);
     else ring(snap.x, snap.y, 5, JCOL[tool], 1.5, true);
   }
@@ -674,7 +684,7 @@ function showInspector() {
     document.getElementById('insDelete').textContent = 'Delete spring';
     return;
   }
-  insTitle.textContent = rec.kind === 'slider' ? 'Slider' : rec.kind === 'motor' ? 'Motor' : 'Hinge';
+  insTitle.textContent = rec.kind === 'slider' ? 'Slider' : rec.kind === 'motor' ? 'Motor' : rec.kind === 'weld' ? 'Weld' : 'Hinge';
   insSub.textContent = jointSub(rec);
   insRotate.hidden = true;
   insKind.hidden = rec.kind === 'slider';
@@ -687,7 +697,7 @@ function showInspector() {
 insKind.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
   if (!sel || !sel.rec) return;
   setJointKind(sel.rec, b.dataset.kind);
-  showInspector();
+  showInspector(); startInfo();
 }));
 // Motor speed and strength: the sliders cover the everyday range, the boxes take any value.
 const insSpeedNum = document.getElementById('insSpeedNum');
@@ -1070,7 +1080,7 @@ function placeJoint(kind, fx, fy) {
   if (!near.length) { setHint('Nothing to join there. Click on a part, or where two parts touch.'); return; }
   const rec = makeJoint(kind, near[0], near[1] || null, planck.Vec2(s.x * S, s.y * S));
   select({ rec });
-  setHint(rec.B ? 'Joined two parts.' : (s.center ? 'Pinned at the part’s centre.' : 'Pinned the part to the background.'));
+  setHint(kind === 'weld' ? (rec.B ? 'Welded two parts together.' : 'Welded the part to the background.') : rec.B ? 'Joined two parts.' : (s.center ? 'Pinned at the part’s centre.' : 'Pinned the part to the background.'));
 }
 
 function startMove(rb, fx, fy) {
@@ -1096,7 +1106,7 @@ canvas.addEventListener('pointerdown', ev => {
   const x = Math.floor(fx), y = Math.floor(fy);
   down = true; lastX = x; lastY = y; dragX = x; dragY = y; hoverX = x; hoverY = y;
   if (tool === 'block') { dragX = lastX = snapCell(x); dragY = lastY = snapCell(y); }
-  if (tool === 'hinge' || tool === 'motor') {
+  if (tool === 'hinge' || tool === 'motor' || tool === 'weld') {
     placeJoint(tool, fx, fy);
     down = false;
   } else if (tool === 'spring') {
@@ -1352,7 +1362,7 @@ brushEl.addEventListener('input', () => {
   brush = +brushEl.value;
   document.getElementById('brushval').textContent = brush;
 });
-const KEYS = { 'y': 'sensor', 'u': 'inverter', 'l': 'pump', 'z': 'electrode', 'g': 'spring', 'k': 'contact', 'w': 'wire', 'p': 'plug', 'i': 'injector', 'v': 'valve', 'o': 'switch', 'j': 'heater', 'f': 'fan', '5': 'fire', '6': 'part', '7': 'block', '8': 'hinge', '9': 'motor', '0': 'erase', 'm': 'move', 's': 'slider', 'b': 'brush', 'h': 'heat', 'c': 'cool' };
+const KEYS = { 'y': 'sensor', 'u': 'inverter', 'l': 'pump', 'z': 'electrode', 'g': 'spring', 'k': 'contact', 'w': 'wire', 'p': 'plug', 'i': 'injector', 'v': 'valve', 'o': 'switch', 'j': 'heater', 'f': 'fan', '5': 'fire', '6': 'part', '7': 'block', '8': 'hinge', '9': 'motor', '0': 'erase', 'm': 'move', 's': 'slider', 'b': 'brush', 'h': 'heat', 'c': 'cool' , 'x': 'weld' };
 const MAT_KEYS = { '1': 'sand', '2': 'water', '3': 'gasoline', '4': 'wall' };
 window.addEventListener('keydown', ev => {
   const tag = ev.target.tagName;
@@ -1386,7 +1396,7 @@ function frame() {
   let stepped = false;
   if (playing) { speedAcc += speed; while (speedAcc >= 1) { speedAcc -= 1; step(); stepped = true; if (speedAcc >= 1) sampleGraph(); } }
   if (sel && ((sel.rb && !bodies.has(sel.rb.id)) || (sel.rec && !jrecs.includes(sel.rec)) || (sel.dev && fan[sel.cells[0]] !== sel.dev))) select(null);
-  snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapAt(hoverFX, hoverFY) : null;
+  snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'weld' || tool === 'slider' || tool === 'spring') ? snapAt(hoverFX, hoverFY) : null;
   render();
   if (sel && sel.rec && frameNo % 10 === 0) insSub.textContent = jointSub(sel.rec);
   if (playing && stepped) sampleGraph();

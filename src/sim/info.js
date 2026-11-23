@@ -76,6 +76,8 @@ export function jointInfo(rec) {
       out.push(q('torque', 'Torque', torque, 'N·m', 0, isFinite(max) ? 'of ' + fmt(max, 0) + ' N·m it has' : 'of unlimited'));
       out.push(q('power', 'Power', torque * Math.abs(spd), 'W', 0));
     }
+  } else if (rec.kind === 'weld') {
+    out.push(q('bend', 'Bending', Math.abs(j.getReactionTorque(1 / DT)) * MASS_SCALE, 'N·m', 0, 'the twist it is holding against'));
   } else if (rec.kind === 'slider') {
     out.push(q('pos', 'Position', j.getJointTranslation(), 'm', 2, 'along its track from where it was set'));
     out.push(q('vel', 'Speed', j.getJointSpeed(), 'm/s', 2));

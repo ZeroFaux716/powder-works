@@ -43,3 +43,22 @@ test('the machines run without anything giving way', () => {
     assert.equal(G.broke, null, sc + ': ' + JSON.stringify(G.broke));
   }
 });
+
+test('a weld holds two parts rigidly together, and an overloaded weld gives way', () => {
+  const build = armMat => {
+    Sim.loadPreset('blank'); G.broke = null;
+    const up = Sim.makePart(Sim.cellsRect(100, 40, 103, 80), ID.Fe), arm = Sim.makePart(Sim.cellsRect(104, 40, 140, 43), ID[armMat]);
+    Sim.makeJoint('weld', up, null, V(101.5 * S, 78 * S));
+    Sim.makeJoint('weld', arm, up, V(104 * S, 41.5 * S));
+    return arm;
+  };
+  const arm = build('Fe'), a0 = arm.b.getAngle(), y0 = arm.b.getPosition().y;
+  run(180);
+  assert.ok(Math.abs(arm.b.getAngle() - a0) < 0.01 && Math.abs(arm.b.getPosition().y - y0) < 0.05 * S, 'the welded iron arm stays put');
+  assert.equal(G.broke, null);
+  const lead = build('Pb');
+  const blk = Sim.makePart(Sim.cellsRect(130, 44, 145, 59), ID.Fe);
+  Sim.makeJoint('hinge', blk, lead, V(137.5 * S, 42.5 * S));
+  run(180);
+  assert.ok(G.broke && G.broke.kind === 'weld', 'a lead arm with a heavy block on its end tears at the weld: ' + JSON.stringify(G.broke && G.broke.kind));
+});
