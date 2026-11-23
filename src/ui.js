@@ -1082,6 +1082,12 @@ function startMove(rb, fx, fy) {
 }
 
 canvas.addEventListener('pointerdown', ev => {
+  if (ev.button === 1 || ev.button === 2) {
+    ev.preventDefault();
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+    panning = { x: ev.clientX, y: ev.clientY, px: panX, py: panY };
+    return;
+  }
   if (ev.button === 0) pushUndo();
   ev.preventDefault();
   try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -1134,6 +1140,7 @@ canvas.addEventListener('pointerdown', ev => {
 });
 
 canvas.addEventListener('pointermove', ev => {
+  if (panning) { panX = panning.px + ev.clientX - panning.x; panY = panning.py + ev.clientY - panning.y; applyZoom(); return; }
   const [fx, fy] = pointAt(ev);
   const x = Math.floor(fx), y = Math.floor(fy);
   hoverX = x; hoverY = y; hoverFX = fx; hoverFY = fy;
@@ -1223,14 +1230,37 @@ function release() {
   }
   drag = null;
 }
-canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointerup', ev => { if (panning) { panning = null; return; } release(ev); });
 canvas.addEventListener('contextmenu', ev => ev.preventDefault());   // Ctrl-click on a Mac is a right click
 canvas.addEventListener('pointercancel', release);
 canvas.addEventListener('pointerleave', () => { hoverX = -1; snap = null; });
+// ---------- zoom ----------
+// Both bench canvases share one CSS transform; pointAt measures the canvas's box on screen, so drawing and
+// picking follow it without change. The wheel zooms around the pointer (with Move and a part selected it still
+// turns the part), + and - zoom about the middle, right- or middle-drag looks around.
+const stageEl = document.getElementById('stage'), zoomBtn = document.getElementById('zoomBtn');
+let zoom = 1, panX = 0, panY = 0, panning = null;
+function applyZoom() {
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  panX = Math.min(0, Math.max(w - w * zoom, panX)); panY = Math.min(0, Math.max(h - h * zoom, panY));
+  const t = zoom === 1 ? '' : 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')';
+  canvas.style.transform = over.style.transform = t;
+  zoomBtn.textContent = Math.round(zoom * 100) + '%';
+  zoomBtn.setAttribute('aria-pressed', zoom === 1 ? 'false' : 'true');
+}
+function zoomAt(cx, cy, factor) {
+  const nz = Math.max(1, Math.min(8, zoom * factor)), f = nz / zoom;
+  panX = cx - (cx - panX) * f; panY = cy - (cy - panY) * f; zoom = nz;
+  applyZoom();
+}
+const stagePoint = ev => { const r = stageEl.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+zoomBtn.addEventListener('click', () => { zoom = 1; panX = panY = 0; applyZoom(); });
+window.addEventListener('resize', applyZoom);
 canvas.addEventListener('wheel', ev => {
-  if (tool !== 'move' || !sel || !sel.rb) return;
   ev.preventDefault();
-  turnSelected(ev.deltaY > 0 ? 1 : -1);
+  if (tool === 'move' && sel && sel.rb) { turnSelected(ev.deltaY > 0 ? 1 : -1); return; }
+  const [cx, cy] = stagePoint(ev);
+  zoomAt(cx, cy, Math.exp(-ev.deltaY * 0.0015));
 }, { passive: false });
 
 // ---------- tools, play and rewind ----------
@@ -1334,6 +1364,8 @@ window.addEventListener('keydown', ev => {
   else if (k === 't') { ev.preventDefault(); openPalette(palette.hidden); }
   else if (k === ' ') { ev.preventDefault(); setPlaying(!playing); }
   else if (k === '.') stepOnce();
+  else if (k === '+' || k === '=') zoomAt(stageEl.clientWidth / 2, stageEl.clientHeight / 2, 1.25);
+  else if (k === '-' || k === '_') zoomAt(stageEl.clientWidth / 2, stageEl.clientHeight / 2, 0.8);
   else if (k === 'r') rewind();
   else if (k === 'q') turnSelected(-1);
   else if (k === 'e') turnSelected(1);

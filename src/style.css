@@ -95,6 +95,7 @@ main {
   min-width: 0;
   min-height: 0;
   position: relative;
+  overflow: hidden;
   background: #0b0f14;
   border: 1px solid var(--edge);
   border-radius: 4px;
@@ -263,3 +264,6 @@ footer span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .info dt:hover, .info dt:hover + dd { background: rgba(183, 198, 214, 0.08); }
 #inspector #insGraph { position: static; inset: auto; max-width: none; width: 100%; height: 72px; display: block; background: rgba(0, 0, 0, 0.25); border-radius: 4px; }
 #insGraphCap { margin: 4px 0 0; }
+
+/* zoom: both bench canvases share one transform, set from ui.js */
+#view, #overlay { transform-origin: 0 0; }
