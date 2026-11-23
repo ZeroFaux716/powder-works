@@ -183,7 +183,7 @@ footer span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #tools .quick button { padding: 5px 6px; gap: 5px; font-size: 12px; }
 #matBtn { border-color: var(--dim); }
 .sw.glyph { border: none; background: none; color: var(--dim); font-size: 12px; line-height: 12px; text-align: center; }
-#palette {
+#palette, #stamps {
   position: absolute;
   top: 10px;
   left: 10px;
@@ -200,7 +200,16 @@ footer span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   z-index: 2;
 }
-#palette[hidden] { display: none; }
+#palette[hidden], #stamps[hidden] { display: none; }
+#stamps { width: 300px; left: auto; right: 10px; }
+#stamps .row { display: flex; gap: 6px; }
+#stamps .row button { flex: 1; }
+.stamp-list { display: flex; flex-direction: column; gap: 6px; }
+.stamp { display: flex; align-items: center; gap: 6px; }
+.stamp .use { padding: 3px; line-height: 0; }
+.stamp img { width: 72px; height: 45px; image-rendering: pixelated; background: #0b0f14; object-fit: contain; }
+.stamp input { flex: 1; min-width: 0; }
+.sw.dashed { border: 1.5px dashed #e8edf3; background: transparent; }
 .ptable {
   display: grid;
   grid-template-columns: repeat(18, 30px);

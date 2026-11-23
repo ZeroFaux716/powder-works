@@ -38,6 +38,7 @@
     <button id="save" type="button" title="Save to a file (Ctrl+S)">Save</button>
     <button id="open" type="button" title="Open a saved file (Ctrl+O)">Open</button>
     <input id="fileIn" type="file" accept=".json,application/json" hidden>
+    <button id="stampsBtn" type="button" aria-expanded="false" title="Copy, paste and saved stamps">Stamps</button>
     <button id="edges" type="button" aria-pressed="true" title="Whether things leave at the edge of the bench">Edges: open</button>
   </div>
   <div class="group" role="group" aria-label="Grid">
@@ -107,6 +108,7 @@
     <button type="button" data-tool="part" aria-pressed="false"><span class="sw" id="partSw" style="background:#9fb3c8"></span>Part<span class="key">6</span></button>
     <button type="button" data-tool="block" aria-pressed="false"><span class="sw" id="blockSw" style="background:#9fb3c8"></span>Block<span class="key">7</span></button>
     <button type="button" data-tool="move" aria-pressed="false"><span class="sw glyph" aria-hidden="true">&#x2725;</span>Move<span class="key">M</span></button>
+    <button type="button" data-tool="select" aria-pressed="false" title="Drag a box, then Ctrl+C to copy, Ctrl+X to cut, Ctrl+V to paste"><span class="sw dashed" aria-hidden="true"></span>Select<span class="key">A</span></button>
     <div class="sep"></div>
     <button type="button" data-tool="hinge" aria-pressed="false"><span class="sw round" style="border-color:#f5d76e"></span>Hinge<span class="key">8</span></button>
     <button type="button" data-tool="motor" aria-pressed="false"><span class="sw round" style="border-color:#6ee0f5"></span>Motor<span class="key">9</span></button>
@@ -133,6 +135,19 @@
       <div id="made" class="compounds"></div>
       <div id="allcpd" class="compounds all"></div>
       <p id="palInfo"></p>
+    </section>
+    <section id="stamps" hidden aria-label="Stamps">
+      <div class="ins-head">
+        <strong>Stamps</strong>
+        <button id="stampsClose" type="button" aria-label="Close stamps">&times;</button>
+      </div>
+      <p class="note">Select (A) a box, then Ctrl+C copy, Ctrl+X cut, Ctrl+V paste. While pasting: R turns, F mirrors, Shift+F flips, Shift-click pastes again, Esc stops.</p>
+      <div class="row">
+        <button id="stampSave" type="button">Save selection as a stamp</button>
+        <button id="stampPaste" type="button">Paste (Ctrl+V)</button>
+      </div>
+      <div id="stampList" class="stamp-list"></div>
+      <p id="stampNone" class="note">No stamps yet.</p>
     </section>
     <section id="inspector" hidden aria-label="Selection">
       <div class="ins-head">

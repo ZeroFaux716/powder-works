@@ -15,6 +15,7 @@ import { isBrittle, partStrength } from './sim/strength.js';
 import { MASS_SCALE, fmt, jointInfo, partInfo } from './sim/info.js';
 import { addBody, cellsRect, draft, finishPart, floodRegion, lineCells, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
+import { clipJoints, clipPicture, cloneClip, copyRegion, cutRegion, mirrorClip, mirrorClipV, pasteClip, turnClip } from './sim/clip.js';
 
 // ---------- rendering and input ----------
 const canvas = document.getElementById('view');
@@ -56,6 +57,7 @@ const TOOL_HINTS = {
   fan: 'Paint a patch of fan in open space. Arrow buttons or arrow keys set which way it blows.',
   heat: 'Hold on anything to heat it. Metals melt at their real melting points.',
   cool: 'Hold on anything to chill it. Water freezes, and gases turn liquid if you go cold enough.',
+  select: 'Drag a box around what to copy. Then Ctrl+C copies, Ctrl+X cuts, Delete clears it, and Stamps keeps it. Parts partly inside come whole.',
   move: 'Drag a part to move it. Q and E or the mouse wheel turn it. Click a joint to edit it.',
   hinge: 'Click where two parts meet to pin them, or on one part to pin it to the background. Snaps to centres and joints.',
   motor: 'Click a part to drive it around that point. Click an existing joint to edit it.',
@@ -513,6 +515,7 @@ function drawOverlay() {
     octx.stroke();
     octx.setLineDash([]);
   }
+  drawClipOverlay();
   if (!down && snap && (tool === 'hinge' || tool === 'motor' || tool === 'weld' || tool === 'slider' || tool === 'spring')) {
     if (snap.joint) ring(snap.x, snap.y, 10, SEL, 1.5, true);
     else ring(snap.x, snap.y, 5, JCOL[tool], 1.5, true);
@@ -1098,13 +1101,15 @@ canvas.addEventListener('pointerdown', ev => {
     panning = { x: ev.clientX, y: ev.clientY, px: panX, py: panY };
     return;
   }
-  if (ev.button === 0) pushUndo();
+  if (ev.button === 0 && (tool !== 'select' || pasting)) pushUndo();
   ev.preventDefault();
   try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
   openPalette(false);
   const [fx, fy] = pointAt(ev);
   const x = Math.floor(fx), y = Math.floor(fy);
+  if (pasting) { placePaste(fx, fy, ev.shiftKey); return; }
   down = true; lastX = x; lastY = y; dragX = x; dragY = y; hoverX = x; hoverY = y;
+  if (tool === 'select') { selBox = { x0: snapCell(x), y0: snapCell(y), x1: snapCell(x), y1: snapCell(y) }; drag = { mode: 'select' }; return; }
   if (tool === 'block') { dragX = lastX = snapCell(x); dragY = lastY = snapCell(y); }
   if (tool === 'hinge' || tool === 'motor' || tool === 'weld') {
     placeJoint(tool, fx, fy);
@@ -1156,7 +1161,8 @@ canvas.addEventListener('pointermove', ev => {
   hoverX = x; hoverY = y; hoverFX = fx; hoverFY = fy;
   if (!down) return;
   if (drag && drag.mode === 'pending' && Math.hypot(fx - drag.sx, fy - drag.sy) > 1.5) startMove(drag.rb, drag.sx, drag.sy);
-  if (drag && (drag.mode === 'slider' || drag.mode === 'spring')) { drag.cx = fx; drag.cy = fy; }
+  if (drag && drag.mode === 'select') { selBox.x1 = snapCell(x); selBox.y1 = snapCell(y); }
+  else if (drag && (drag.mode === 'slider' || drag.mode === 'spring')) { drag.cx = fx; drag.cy = fy; }
   else if (drag && drag.mode === 'grab') drag.j.setTarget(planck.Vec2(fx * S, fy * S));
   else if (drag && drag.mode === 'move') {
     const dx = snapCell(Math.round(fx - drag.sx)), dy = snapCell(Math.round(fy - drag.sy));
@@ -1216,6 +1222,7 @@ function release() {
   if (!down) return;
   down = false;
   if (shape) { applyShape(); shape = null; }
+  if (drag && drag.mode === 'select') { finishSelect(); drag = null; return; }
   if (drag && drag.mode === 'spring') {
     const end = snapAt(drag.cx, drag.cy);
     if (Math.hypot(end.x - drag.x, end.y - drag.y) < 1.5) setHint('Drag further: a spring needs some length.');
@@ -1362,7 +1369,7 @@ brushEl.addEventListener('input', () => {
   brush = +brushEl.value;
   document.getElementById('brushval').textContent = brush;
 });
-const KEYS = { 'y': 'sensor', 'u': 'inverter', 'l': 'pump', 'z': 'electrode', 'g': 'spring', 'k': 'contact', 'w': 'wire', 'p': 'plug', 'i': 'injector', 'v': 'valve', 'o': 'switch', 'j': 'heater', 'f': 'fan', '5': 'fire', '6': 'part', '7': 'block', '8': 'hinge', '9': 'motor', '0': 'erase', 'm': 'move', 's': 'slider', 'b': 'brush', 'h': 'heat', 'c': 'cool' , 'x': 'weld' };
+const KEYS = { 'y': 'sensor', 'u': 'inverter', 'l': 'pump', 'z': 'electrode', 'g': 'spring', 'k': 'contact', 'w': 'wire', 'p': 'plug', 'i': 'injector', 'v': 'valve', 'o': 'switch', 'j': 'heater', 'f': 'fan', '5': 'fire', '6': 'part', '7': 'block', '8': 'hinge', '9': 'motor', '0': 'erase', 'm': 'move', 's': 'slider', 'b': 'brush', 'h': 'heat', 'c': 'cool' , 'x': 'weld' , 'a': 'select' };
 const MAT_KEYS = { '1': 'sand', '2': 'water', '3': 'gasoline', '4': 'wall' };
 window.addEventListener('keydown', ev => {
   const tag = ev.target.tagName;
@@ -1612,3 +1619,161 @@ window.addEventListener('keydown', ev => {
   else if (k === 's') { ev.preventDefault(); saveBench(); }
   else if (k === 'o') { ev.preventDefault(); fileIn.click(); }
 });
+
+// ---------- select, copy, paste and stamps ----------
+// Select drags a box; Ctrl+C / Ctrl+X take what is in it as a clip (see sim/clip.js); Ctrl+V shows the clip
+// under the pointer to place with a click. R turns it a quarter, F mirrors it, Shift+F flips it upside down.
+// Stamps are clips kept by the browser, with a small picture of each.
+let selBox = null, clipboard = null, pasting = null;
+const STAMPS_KEY = 'powder-works-stamps';
+const DEV_RGB = { [CONTACT]: [214, 176, 64], [WIRE]: [176, 102, 58], [PLUG]: [225, 232, 240], [INJECTOR]: [168, 116, 222], [VALVE]: [92, 200, 120], [SWITCH]: [120, 230, 90],
+  [HEATER]: [214, 92, 56], [SENSE_T]: [79, 209, 197], [SENSE_P]: [79, 209, 197], [SENSE_C]: [79, 209, 197], [INVERTER]: [199, 125, 255], [PUMP]: [58, 123, 213], [ELECTRODE]: [201, 209, 217] };
+const boxOf = b => ({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
+
+// A clip drawn into a small canvas, one pixel a cell; ox, oy: where the clip's corner is in it
+function clipCanvas(clip) {
+  const pic = clipPicture(clip);
+  let x0 = 0, y0 = 0, x1 = clip.w - 1, y1 = clip.h - 1;
+  for (const [x, y] of pic) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d'), img = c.createImageData(w, h), d = img.data;
+  for (const [x, y, m] of pic) {
+    const col = m >= 0 ? MATS[m].color : m >= -4 ? [63, 167, 160] : DEV_RGB[-m] || [200, 200, 200];
+    const o = ((y - y0) * w + (x - x0)) * 4;
+    d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+  return { cv, ox: -x0, oy: -y0 };
+}
+function startPaste(clip) {
+  if (!clip) { setHint('Nothing copied yet. Pick Select (A), drag a box, then Ctrl+C.'); return; }
+  if (down) release();
+  pasting = { clip: cloneClip(clip) };
+  refreshPaste();
+  setHint('Click to paste. R turns it, F mirrors it, Shift+F flips it upside down, Shift-click to paste more than once, Esc to stop.');
+}
+function refreshPaste() { const p = pasting; Object.assign(p, clipCanvas(p.clip)); p.joints = clipJoints(p.clip); }
+// where the clip's top-left corner goes, for the pointer at fx, fy: the clip is centred on the pointer
+function pasteCorner(fx, fy) { const c = pasting.clip; return [snapCell(Math.round(fx - c.w / 2)), snapCell(Math.round(fy - c.h / 2))]; }
+function placePaste(fx, fy, again) {
+  const [x0, y0] = pasteCorner(fx, fy);
+  const made = pasteClip(pasting.clip, x0, y0);
+  setHint('Pasted' + (made.length ? ' (' + made.length + (made.length === 1 ? ' part' : ' parts') + ')' : '') + (again ? '. Click to paste another.' : '. Ctrl+V pastes again.'));
+  if (!again) pasting = null;
+}
+function finishSelect() {
+  const b = boxOf(selBox);
+  if (b.x1 - b.x0 < 1 && b.y1 - b.y0 < 1) { selBox = null; setHint(TOOL_HINTS.select); return; }
+  selBox = b;
+  setHint('Selected ' + (b.x1 - b.x0 + 1) + ' × ' + (b.y1 - b.y0 + 1) + '. Ctrl+C copies, Ctrl+X cuts, Delete clears, and Stamps can keep it.');
+}
+function takeSelection(cut) {
+  if (!selBox) { setTool('select'); setHint('Drag a box around what to ' + (cut ? 'cut' : 'copy') + ', then press Ctrl+' + (cut ? 'X' : 'C') + ' again.'); return null; }
+  const { x0, y0, x1, y1 } = selBox;
+  if (cut) pushUndo();
+  const clip = cut ? cutRegion(x0, y0, x1, y1) : copyRegion(x0, y0, x1, y1);
+  if (!clip) { setHint('There is nothing in the box to ' + (cut ? 'cut.' : 'copy.')); return null; }
+  if (cut) { selBox = null; select(null); }
+  clipboard = clip;
+  const n = clip.parts.length;
+  setHint((cut ? 'Cut' : 'Copied') + (n ? ' with ' + n + (n === 1 ? ' part' : ' parts') + (clip.joints.length ? ' and ' + clip.joints.length + (clip.joints.length === 1 ? ' joint' : ' joints') : '') : '') + '. Ctrl+V to paste.');
+  return clip;
+}
+function drawClipOverlay() {
+  if (selBox) {
+    const b = boxOf(selBox);
+    octx.setLineDash([5, 4]); octx.lineWidth = 1.5; octx.strokeStyle = '#e8edf3';
+    octx.strokeRect(b.x0 * OS + 0.5, b.y0 * OS + 0.5, (b.x1 - b.x0 + 1) * OS - 1, (b.y1 - b.y0 + 1) * OS - 1);
+    octx.setLineDash([]);
+  }
+  if (pasting && hoverX >= 0) {
+    const [x0, y0] = pasteCorner(hoverFX, hoverFY), p = pasting;
+    octx.save();
+    octx.imageSmoothingEnabled = false; octx.globalAlpha = 0.6;
+    octx.drawImage(p.cv, (x0 - p.ox) * OS, (y0 - p.oy) * OS, p.cv.width * OS, p.cv.height * OS);
+    octx.restore();
+    octx.setLineDash([5, 4]); octx.lineWidth = 1.5; octx.strokeStyle = SEL;
+    octx.strokeRect(x0 * OS, y0 * OS, p.clip.w * OS, p.clip.h * OS);
+    octx.setLineDash([]);
+    for (const [jx, jy, kind] of p.joints) ring(x0 + jx, y0 + jy, 4, JCOL[kind] || SEL, 1.5);
+  }
+}
+
+// ---------- stamps ----------
+const stampsEl = document.getElementById('stamps'), stampsBtn = document.getElementById('stampsBtn');
+const stampList = document.getElementById('stampList'), stampNone = document.getElementById('stampNone');
+let stamps = [];
+try { stamps = JSON.parse(localStorage.getItem(STAMPS_KEY) || '[]'); } catch (e) { stamps = []; }
+function keepStamps() {
+  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); return true; }
+  catch (e) { setHint('The browser has no room left to keep that stamp. Delete some older stamps, or save the bench to a file.'); return false; }
+}
+function thumbOf(clip) {
+  const { cv } = clipCanvas(clip), k = Math.max(1, Math.floor(Math.min(144 / cv.width, 90 / cv.height)));
+  const t = document.createElement('canvas'); t.width = cv.width * k; t.height = cv.height * k;
+  const c = t.getContext('2d'); c.imageSmoothingEnabled = false; c.drawImage(cv, 0, 0, t.width, t.height);
+  return t.toDataURL();
+}
+function showStamps() {
+  stampList.textContent = '';
+  stampNone.hidden = stamps.length > 0;
+  stamps.forEach((s, k) => {
+    const row = document.createElement('div'); row.className = 'stamp';
+    const use = document.createElement('button'); use.type = 'button'; use.className = 'use'; use.title = 'Paste this stamp';
+    const img = document.createElement('img'); img.src = s.thumb; img.alt = ''; use.append(img);
+    use.addEventListener('click', () => { openStamps(false); startPaste(s.clip); });
+    const name = document.createElement('input'); name.type = 'text'; name.value = s.name; name.setAttribute('aria-label', 'Stamp name');
+    name.addEventListener('change', () => { s.name = name.value.trim() || s.name; name.value = s.name; keepStamps(); });
+    name.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === 'Escape') name.blur(); });
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', 'Delete stamp ' + s.name);
+    del.addEventListener('click', () => { stamps.splice(k, 1); keepStamps(); showStamps(); });
+    row.append(use, name, del);
+    stampList.append(row);
+  });
+}
+function openStamps(show) {
+  stampsEl.hidden = !show;
+  stampsBtn.setAttribute('aria-expanded', show ? 'true' : 'false');
+  if (show) showStamps();
+}
+stampsBtn.addEventListener('click', () => openStamps(stampsEl.hidden));
+document.getElementById('stampsClose').addEventListener('click', () => openStamps(false));
+document.getElementById('stampPaste').addEventListener('click', () => { openStamps(false); startPaste(clipboard); });
+document.getElementById('stampSave').addEventListener('click', () => {
+  const clip = selBox ? copyRegion(selBox.x0, selBox.y0, selBox.x1, selBox.y1) : clipboard;
+  if (!clip) { setHint('Select (A) a box around something first, or copy something.'); return; }
+  let n = stamps.length + 1;
+  while (stamps.some(s => s.name === 'Stamp ' + n)) n++;
+  stamps.unshift({ name: 'Stamp ' + n, clip, thumb: thumbOf(clip) });
+  if (!keepStamps()) { stamps.shift(); return; }
+  showStamps();
+  const box = stampList.querySelector('input');
+  if (box) { box.focus(); box.select(); }
+  setHint('Stamp saved. Type a name for it, or click its picture to paste it.');
+});
+
+window.addEventListener('keydown', ev => {
+  const tag = ev.target.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  const k = ev.key.toLowerCase();
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
+    if (k === 'c') takeSelection(false);
+    else if (k === 'x') takeSelection(true);
+    else if (k === 'v') startPaste(clipboard);
+    else return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    return;
+  }
+  if (pasting && !ev.altKey) {
+    if (k === 'r') { turnClip(pasting.clip); refreshPaste(); }
+    else if (k === 'f') { (ev.shiftKey ? mirrorClipV : mirrorClip)(pasting.clip); refreshPaste(); }
+    else if (k === 'escape') { pasting = null; setHint('Paste put away. Ctrl+V brings it back.'); }
+    else return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+  } else if (selBox && !sel && (k === 'delete' || k === 'backspace')) {
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    pushUndo(); cutRegion(selBox.x0, selBox.y0, selBox.x1, selBox.y1); selBox = null;
+    setHint('Cleared.');
+  } else if (selBox && k === 'escape' && stampsEl.hidden && palette.hidden) { selBox = null; }
+}, true);
