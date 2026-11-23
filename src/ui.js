@@ -12,6 +12,7 @@ import { grab, jointNear, jointPoint, jrecs, longAxis, makeJoint, movePart, remo
 import { restore, snapshot, step } from './sim/world.js';
 import { alloyName, massOf, massShare, meltWith, pct, solute } from './sim/alloys.js';
 import { isBrittle, partStrength } from './sim/strength.js';
+import { MASS_SCALE, fmt, jointInfo, partInfo } from './sim/info.js';
 import { addBody, cellsRect, draft, finishPart, floodRegion, lineCells, makePart, paint, passedLast } from './sim/editing.js';
 import { loadPreset } from './sim/scenes.js';
 
@@ -299,6 +300,105 @@ function zigzag(ax, ay, bx, by, color, width) {
   octx.lineTo(bx * OS, by * OS);
   octx.lineWidth = width; octx.strokeStyle = color; octx.stroke();
 }
+// ---------- live information ----------
+// What the inspector lists for the selection (info.js works the numbers out), refreshed ten times a second.
+// Click a row to graph it over the last 10 seconds of play.
+const insInfo = document.getElementById('insInfo'), insPlot = document.getElementById('insPlot');
+const insGraph = document.getElementById('insGraph'), insGraphCap = document.getElementById('insGraphCap');
+const gctx = insGraph.getContext('2d');
+const HISTORY = 600;                       // 10 s of frames
+let graphKey = null, history = [], infoFor = null;
+function readings() {
+  if (!sel) return null;
+  if (sel.rb) return partInfo(sel.rb, jrecs.filter(r => r.A === sel.rb || r.B === sel.rb), partName);
+  if (sel.rec && sel.rec.j) return jointInfo(sel.rec);
+  return null;
+}
+function defaultGraph() {
+  if (sel.rec) return sel.rec.kind === 'slider' ? 'vel' : sel.rec.kind === 'spring' ? 'force' : 'rpm';
+  return jrecs.some(r => (r.A === sel.rb || r.B === sel.rb) && (r.kind === 'hinge' || r.kind === 'motor') && !r.B) ? 'spin' : 'speed';
+}
+// a new selection: build the rows
+function startInfo() {
+  const list = readings();
+  insInfo.hidden = !list; insPlot.hidden = !list;
+  infoFor = sel; history = [];
+  if (!list) return;
+  graphKey = defaultGraph();
+  insInfo.textContent = '';
+  for (const r of list) {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = r.label; dt.dataset.key = dd.dataset.key = r.key;
+    if (r.note) dt.title = dd.title = r.note;
+    insInfo.append(dt, dd);
+  }
+  updateInfo(list);
+}
+function updateInfo(list) {
+  list = list || readings();
+  if (!list) return;
+  const byKey = new Map(list.map(r => [r.key, r]));
+  for (const el of insInfo.children) {
+    const r = byKey.get(el.dataset.key);
+    el.classList.toggle('on', el.dataset.key === graphKey);
+    if (el.tagName === 'DD') el.textContent = r ? fmt(r.value, r.dp) + (r.unit ? ' ' + r.unit : '') : '–';
+  }
+}
+insInfo.addEventListener('click', ev => {
+  const key = ev.target.dataset && ev.target.dataset.key;
+  if (!key) return;
+  graphKey = key; history = [];
+  updateInfo(); drawGraph();
+});
+function sampleGraph() {
+  if (!graphKey || !sel || infoFor !== sel) return;
+  const r = (readings() || []).find(x => x.key === graphKey);
+  if (!r || !isFinite(r.value)) return;
+  history.push(r.value);
+  if (history.length > HISTORY) history.shift();
+}
+function drawGraph() {
+  const w = insGraph.width = insGraph.clientWidth * devicePixelRatio || 260, h = insGraph.height = 72 * devicePixelRatio;
+  gctx.clearRect(0, 0, w, h);
+  const r = (readings() || []).find(x => x.key === graphKey);
+  if (!r) { insGraphCap.textContent = ''; return; }
+  if (history.length < 2) { insGraphCap.textContent = r.label + ': press Play to graph it'; return; }
+  let lo = Math.min(...history), hi = Math.max(...history);
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+  const X = k => (k + HISTORY - history.length) / (HISTORY - 1) * w, Y = v => h - (v - lo) / (hi - lo) * h;
+  if (lo < 0 && hi > 0) { gctx.strokeStyle = 'rgba(183,198,214,0.25)'; gctx.lineWidth = 1; gctx.beginPath(); gctx.moveTo(0, Y(0)); gctx.lineTo(w, Y(0)); gctx.stroke(); }
+  gctx.beginPath();
+  history.forEach((v, k) => k ? gctx.lineTo(X(k), Y(v)) : gctx.moveTo(X(k), Y(v)));
+  gctx.strokeStyle = '#f2a33a'; gctx.lineWidth = 1.5 * devicePixelRatio; gctx.stroke();
+  const unit = r.unit ? ' ' + r.unit : '';
+  insGraphCap.textContent = r.label + ' over the last ' + Math.round(history.length / 60) + ' s: ' + fmt(Math.min(...history), r.dp) + ' to ' + fmt(Math.max(...history), r.dp) + unit + ', now ' + fmt(history[history.length - 1], r.dp) + unit;
+}
+// Arrows on the bench for a selected part: its velocity from its centre, and the force on it at each joint.
+function drawArrows() {
+  if (!sel || !sel.rb || !bodies.has(sel.rb.id)) return;
+  const b = sel.rb.b, c = b.getWorldCenter(), v = b.getLinearVelocity();
+  const sp = Math.hypot(v.x, v.y);
+  if (sp > 0.02) arrow(c.x / S, c.y / S, v.x / sp, v.y / sp, Math.min(40, 6 + sp * 8), '#6fc3ff');
+  for (const rec of jrecs) {
+    if (!rec.j || (rec.A !== sel.rb && rec.B !== sel.rb)) continue;
+    const f = rec.j.getReactionForce(60), F = Math.hypot(f.x, f.y);
+    if (F < 1e-6) continue;
+    const sign = rec.B === sel.rb ? 1 : -1, [x, y] = jointPoint(rec);
+    arrow(x, y, sign * f.x / F, sign * f.y / F, Math.min(40, 6 + 34 * (rec.cap ? rec.load / rec.cap : 0)), jointColor(rec, '#e8eef5'));
+  }
+}
+function arrow(x, y, ux, uy, len, color) {
+  const x2 = (x + ux * len) * OS, y2 = (y + uy * len) * OS;
+  octx.beginPath(); octx.moveTo(x * OS, y * OS); octx.lineTo(x2, y2);
+  octx.strokeStyle = color; octx.lineWidth = 2; octx.stroke();
+  const a = Math.atan2(uy, ux), hs = 7;
+  octx.beginPath(); octx.moveTo(x2, y2);
+  octx.lineTo(x2 - hs * Math.cos(a - 0.45), y2 - hs * Math.sin(a - 0.45));
+  octx.lineTo(x2 - hs * Math.cos(a + 0.45), y2 - hs * Math.sin(a + 0.45));
+  octx.closePath(); octx.fillStyle = color; octx.fill();
+}
+
 // a joint's colour: its own, turning amber past half of what its pins can take and red near the limit
 const LOAD_AMBER = '#e8b04a', LOAD_RED = '#ef5b4f';
 function jointColor(rec, base) {
@@ -315,6 +415,7 @@ const loadText = rec => rec.cap ? 'load ' + Math.round(100 * rec.load / rec.cap)
 function drawOverlay() {
   octx.clearRect(0, 0, over.width, over.height);
   if (gridOn && view === 0) drawGrid();
+  drawArrows();
   for (const rec of jrecs) {
     const [x, y] = jointPoint(rec);
     const chosen = sel && sel.rec === rec;
@@ -459,6 +560,7 @@ function select(next) {
   sel = next;
   if (sel && sel.dev) for (const c of sel.cells) devMask[c] = 1;
   showInspector();
+  startInfo();
 }
 // A device is every touching cell of the same kind: a valve, an injector line, a switch.
 function devName(i) {
@@ -590,7 +692,7 @@ insKind.querySelectorAll('button').forEach(b => b.addEventListener('click', () =
 // Motor speed and strength: the sliders cover the everyday range, the boxes take any value.
 const insSpeedNum = document.getElementById('insSpeedNum');
 const insStrengthNum = document.getElementById('insStrengthNum');
-const STRENGTH_DECADES = 4.3;      // the slider tops out near 20,000 N m
+const STRENGTH_DECADES = 4.3;      // the slider tops out near 20,000 engine units (about 16 MN m in real units)
 function strengthFromSlider(v) {
   if (v <= 0) return 0;
   const s = Math.pow(10, v / 100 * STRENGTH_DECADES);
@@ -610,7 +712,7 @@ function showMotorValues(rec) {
   insSpeed.value = Math.max(-120, Math.min(120, rpm));
   insSpeedNum.value = tidy(rpm);
   insStrength.value = sliderFromStrength(rec.strength);
-  insStrengthNum.value = tidy(rec.strength);
+  insStrengthNum.value = tidy(rec.strength * MASS_SCALE);   // (in the same real units as the readouts)
   document.getElementById('insSpeedVal').textContent = rpm === 0 ? '(holds still)' : rpm > 0 ? '(clockwise)' : '(anticlockwise)';
 }
 function applyMotor(rpm, strength) {
@@ -629,7 +731,7 @@ function typedSpeed() {
 function typedStrength() {
   if (!sel || !sel.rec) return;
   const v = parseStrength(insStrengthNum.value);
-  if (v !== null) applyMotor(sel.rec.spin * RPM, v);
+  if (v !== null) applyMotor(sel.rec.spin * RPM, v / MASS_SCALE);
   else { showMotorValues(sel.rec); setHint('Strength needs a number that is zero or more, or "inf".'); }
 }
 insSpeedNum.addEventListener('change', typedSpeed);
@@ -1242,6 +1344,8 @@ function frame() {
   snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapAt(hoverFX, hoverFY) : null;
   render();
   if (sel && sel.rec && frameNo % 10 === 0) insSub.textContent = jointSub(sel.rec);
+  if (playing) sampleGraph();
+  if (sel && infoFor === sel && frameNo % 6 === 0) { updateInfo(); drawGraph(); }
   if (G.broke) {
     const b = G.broke, name = b.sx && b.sol ? alloyName(b.mat, b.sol, massOf(b.mat, b.sol, b.sx)) : MATS[b.mat].name;
     setHint(b.kind === 'impact' ? 'A ' + name.toLowerCase() + ' part cracked on impact: it is brittle. A tough metal takes knocks.'

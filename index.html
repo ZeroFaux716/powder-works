@@ -133,6 +133,11 @@
         <button id="insClose" type="button" aria-label="Clear selection">&times;</button>
       </div>
       <p id="insSub"></p>
+      <dl id="insInfo" class="info" hidden></dl>
+      <div id="insPlot" hidden>
+        <canvas id="insGraph" width="260" height="72" aria-label="Graph of the chosen value over the last 10 seconds"></canvas>
+        <p id="insGraphCap" class="note"></p>
+      </div>
       <div id="insKind" class="seg" role="group" aria-label="Joint type">
         <button type="button" data-kind="hinge" aria-pressed="false">Hinge</button>
         <button type="button" data-kind="motor" aria-pressed="false">Motor</button>

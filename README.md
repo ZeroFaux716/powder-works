@@ -24,6 +24,9 @@ hinges, motors, sliders and springs.
 - Part strength from real hardness data: overloaded joints tear out (or crack, in brittle metal), hot metal is
   weaker, steel is stronger than iron, and brittle parts crack when they hit something. Joints turn amber and
   red as they near their limit
+- Live information like Algodoo's: select a part for its mass, speed, spin, energies, momentum and temperature;
+  a hinge or motor for its angle, rpm, torque and power; a slider or spring for position, stretch and force.
+  Click any reading to graph it over the last 10 s; a selected part shows its velocity and joint forces as arrows
 
 Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automatically from `main` whenever the checks pass).
 
@@ -45,6 +48,7 @@ Play it at **https://zerofaux716.github.io/powder-works/** (rebuilt automaticall
     Richards' rule) and heat conduction
   - `strength.js`: part strength (`strength.gen.js`, harder for alloys, softer when hot). Joints give way when
     the force on them passes what the metal round their pins can take; brittle parts crack on impact
+  - `info.js`: the inspector's live readings for parts and joints, in real units (parts taken as 10 cm thick)
   - `sleep.js`: chunk sleeping. The gas, heat and air passes skip 16x16 chunks where everything has settled;
     a scan each frame wakes any chunk where something changed, and its neighbours
   - `index.js`: re-exports everything, plus the `Sim` object the tests use

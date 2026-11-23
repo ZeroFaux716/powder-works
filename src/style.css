@@ -253,3 +253,13 @@ footer span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #palette.searching .compounds.all button:not(.hit) { display: none; }
 #palette .compounds.all { max-height: 132px; overflow-y: auto; }
 #palette .subhead { margin: 8px 0 4px; font-size: 12px; opacity: 0.7; }
+
+/* live information in the inspector: label and value rows; click a row to graph it */
+.info { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; margin: 0; font-size: 12px; }
+.info dt, .info dd { margin: 0; padding: 1px 3px; cursor: pointer; border-radius: 3px; }
+.info dt { color: var(--dim); }
+.info dd { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.info .on { background: rgba(242, 163, 58, 0.16); }
+.info dt:hover, .info dt:hover + dd { background: rgba(183, 198, 214, 0.08); }
+#inspector #insGraph { position: static; inset: auto; max-width: none; width: 100%; height: 72px; display: block; background: rgba(0, 0, 0, 0.25); border-radius: 4px; }
+#insGraphCap { margin: 4px 0 0; }

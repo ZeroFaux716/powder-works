@@ -15,6 +15,7 @@ import { addBody, cellsDisc, cellsRect, draft, fill, finishPart, floodRegion, li
 import { loadPreset } from './scenes.js';
 import { asleepCount, setSleeping } from './sleep.js';
 import { solute, massShare, meltOf, meltWith, alloyName } from './alloys.js';
+import { partInfo, jointInfo, MASS_SCALE } from './info.js';
 
 export * from './constants.js';
 export * from './materials.js';
@@ -34,11 +35,12 @@ export * from './scenes.js';
 export * from './sleep.js';
 export * from './alloys.js';
 export * from './strength.js';
+export * from './info.js';
 
 export const Sim = {
   W, H, P0, S, MATS, ID, NONE, STATIC, POWDER, LIQUID, GAS, PART, type, st, life, bid, bodies,
   setOpenEdges(v) { G.openEdges = v; }, fan, lit, dset, gate, ddir, setPaintDir(d) { G.paintDir = d; }, need, made, CPDI, NE0, PAIR_PRODUCT, takeNews() { const m = G.madeNews; G.madeNews = null; return m; }, burn, spark, get FX() { return FX; }, get FY() { return FY; }, nX, nY, nFast, emit, get neutrons() { return G.nCount; }, get temp() { return temp; }, get P() { return P; }, get world() { return world; },
   lat, aux, ox, LP, CAPS, jrecs, springEnds, setSpring, step, paint, finishPart, addBody, cellsRect, cellsDisc, removeBody, loadPreset, clearAll, fill, stateAt,
   bodiesAt, makeJoint, removeJoint, setJointKind, setMotor, jointPoint, jointNear, snapPoint, longAxis,
-  setSleeping, asleepCount, solute, massShare, meltOf, meltWith, alloyName, movePart, grab, ungrab, snapshot, restore, makePart, passPairs, pairKey, letPass, partCovers, draft, lineCells, floodRegion
+  setSleeping, asleepCount, solute, massShare, meltOf, meltWith, alloyName, partInfo, jointInfo, MASS_SCALE, movePart, grab, ungrab, snapshot, restore, makePart, passPairs, pairKey, letPass, partCovers, draft, lineCells, floodRegion
 };

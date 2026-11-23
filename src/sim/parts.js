@@ -32,9 +32,11 @@ export function rectsOf(occ, w, h) {
   return out;
 }
 
+// The physics engine keeps densities between these (relative to iron) for stable contacts
+export const DENS_LO = 0.05, DENS_HI = 2.5;
 export function addFixtures(b, occ, w, h, ox, oy, matId) {
   // iron is the reference weight; lighter and heavier metals scale from it
-  const density = Math.max(0.05, Math.min(2.5, MATS[matId].dens / 7.87));
+  const density = Math.max(DENS_LO, Math.min(DENS_HI, MATS[matId].dens / 7.87));
   for (const [x0, y0, x1, y1] of rectsOf(occ, w, h)) {
     const hx = (x1 - x0 + 1) / 2, hy = (y1 - y0 + 1) / 2;
     const lx = ox + x0 + hx, ly = oy + y0 + hy;
