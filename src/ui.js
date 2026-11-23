@@ -1280,6 +1280,17 @@ function setPlaying(p) {
   modeEl.dataset.mode = p ? 'run' : 'build';
 }
 playBtn.addEventListener('click', () => setPlaying(!playing));
+// One frame at a time, and slow motion: time runs at `speed` frames per screen frame (2x runs two).
+let speed = 1, speedAcc = 0;
+const speedEl = document.getElementById('speed');
+speedEl.addEventListener('change', () => { speed = +speedEl.value; speedAcc = 0; setHint(speed === 1 ? 'Normal speed.' : speed < 1 ? 'Slow motion: ' + speedEl.selectedOptions[0].textContent + ' speed.' : 'Double speed.'); });
+function stepOnce() {
+  if (playing) setPlaying(false);
+  if (!saved) { saved = snapshot(); rewindBtn.disabled = false; }   // so Rewind goes back to before the first step
+  step(); sampleGraph();
+  if (sel && infoFor === sel) { updateInfo(); drawGraph(); }
+}
+document.getElementById('stepBtn').addEventListener('click', stepOnce);
 function rewind() {
   if (!saved) return;
   if (drag && drag.mode === 'grab') ungrab(drag.j);
@@ -1322,6 +1333,7 @@ window.addEventListener('keydown', ev => {
   else if (tool === 'fan' && k.startsWith('arrow')) { ev.preventDefault(); setFanDir({ arrowright: 1, arrowleft: 2, arrowup: 3, arrowdown: 4 }[k]); }
   else if (k === 't') { ev.preventDefault(); openPalette(palette.hidden); }
   else if (k === ' ') { ev.preventDefault(); setPlaying(!playing); }
+  else if (k === '.') stepOnce();
   else if (k === 'r') rewind();
   else if (k === 'q') turnSelected(-1);
   else if (k === 'e') turnSelected(1);
@@ -1339,12 +1351,13 @@ versionEl.title = __COMMIT__ === 'dev' ? 'Running from the dev server' : 'Built 
 let frameNo = 0;
 function frame() {
   if (down && BRUSHED[tool] && tool !== 'part' && !shape) dab(lastX, lastY);
-  if (playing) step();
+  let stepped = false;
+  if (playing) { speedAcc += speed; while (speedAcc >= 1) { speedAcc -= 1; step(); stepped = true; if (speedAcc >= 1) sampleGraph(); } }
   if (sel && ((sel.rb && !bodies.has(sel.rb.id)) || (sel.rec && !jrecs.includes(sel.rec)) || (sel.dev && fan[sel.cells[0]] !== sel.dev))) select(null);
   snap = hoverX >= 0 && (tool === 'hinge' || tool === 'motor' || tool === 'slider' || tool === 'spring') ? snapAt(hoverFX, hoverFY) : null;
   render();
   if (sel && sel.rec && frameNo % 10 === 0) insSub.textContent = jointSub(sel.rec);
-  if (playing) sampleGraph();
+  if (playing && stepped) sampleGraph();
   if (sel && infoFor === sel && frameNo % 6 === 0) { updateInfo(); drawGraph(); }
   if (G.broke) {
     const b = G.broke, name = b.sx && b.sol ? alloyName(b.mat, b.sol, massOf(b.mat, b.sol, b.sx)) : MATS[b.mat].name;

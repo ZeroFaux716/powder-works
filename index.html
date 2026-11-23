@@ -59,6 +59,11 @@
   <div class="group">
     <span id="mode" class="chip" data-mode="build">Building</span>
     <button id="play" type="button" class="primary">Play</button>
+    <button id="stepBtn" type="button" title="One frame forward (.)">Step</button>
+    <select id="speed" aria-label="Speed" title="How fast time runs: slow motion to see a mechanism move">
+      <option value="0.125">⅛×</option><option value="0.25">¼×</option><option value="0.5">½×</option>
+      <option value="1" selected>1×</option><option value="2">2×</option>
+    </select>
     <button id="rewind" type="button" disabled>Rewind</button>
   </div>
 </header>
